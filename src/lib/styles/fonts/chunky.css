@@ -1,0 +1,12 @@
+@font-face {
+	/* text-box: trim-both cap alphabetic; */
+	font-style: normal;
+	font-weight: normal;
+	/* src: url('$lib/assets/fonts/chunky.ttf') format('truetype'); */
+	/* src: url('$lib/assets/fonts/chi-kare-go-2.ttf') format('truetype'); */
+	src: url('$lib/assets/fonts/finders-keepers.ttf') format('truetype');
+	font-family: 'chunky';
+	font-display: swap;
+	/* ascent-override: 60%; */
+	descent-override: 18%;
+}

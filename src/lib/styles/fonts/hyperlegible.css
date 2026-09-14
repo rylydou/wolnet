@@ -1,0 +1,31 @@
+@font-face {
+	font-style: normal;
+	font-weight: normal;
+	src: url('/fonts/hyperlegible-reg.woff2') format('woff2');
+	font-family: 'hyperlegible';
+	font-display: swap;
+}
+
+@font-face {
+	font-style: normal;
+	font-weight: bold;
+	src: url('/fonts/hyperlegible-bold.woff2') format('woff2');
+	font-family: 'hyperlegible';
+	font-display: swap;
+}
+
+@font-face {
+	font-style: italic;
+	font-weight: normal;
+	src: url('/fonts/hyperlegible-italic.woff2') format('woff2');
+	font-family: 'hyperlegible';
+	font-display: swap;
+}
+
+@font-face {
+	font-style: italic;
+	font-weight: bold;
+	src: url('/fonts/hyperlegible-bold-italic.woff2') format('woff2');
+	font-family: 'hyperlegible';
+	font-display: swap;
+}
