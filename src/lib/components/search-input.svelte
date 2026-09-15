@@ -4,7 +4,7 @@
 		[key: string]: any;
 	}
 
-	let { value = $bindable(''), ...rest }: Props = $props();
+	let { value = $bindable(""), ...rest }: Props = $props();
 </script>
 
 <label class="search-input" style="flex: 1;">

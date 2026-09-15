@@ -1,5 +1,13 @@
 {
-	"files.associations": {
-		"*.css": "tailwindcss"
+	"explorer.sortOrder": "filesFirst",
+	"editor.defaultFormatter": "esbenp.prettier-vscode",
+	"[typescript]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode"
+	},
+	"[svelte]": {
+		"editor.defaultFormatter": "svelte.svelte-vscode"
+	},
+	"files.exclude": {
+		"**/*.uid": true
 	}
 }

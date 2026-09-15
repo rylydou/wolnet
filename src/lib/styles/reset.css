@@ -47,7 +47,7 @@ dialog {
 	max-height: unset;
 }
 
-input[type='number'] {
+input[type="number"] {
 	appearance: textfield;
 
 	&::-webkit-outer-spin-button,

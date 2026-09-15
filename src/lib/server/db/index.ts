@@ -1,10 +1,21 @@
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import Database from 'better-sqlite3';
-import * as schema from './schema';
-import { DATABASE_URL } from '$app/env/private';
+import { SQL } from "bun";
+import { drizzle } from "drizzle-orm/bun-sqlite";
+import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import * as serverConfig from "../config";
+import * as schema from "./schema";
+import { Database } from "bun:sqlite";
 
-if (!DATABASE_URL) throw new Error('DATABASE_URL is not set');
+export * as schema from "./schema";
 
-const client = new Database(DATABASE_URL);
+export const client = new Database("./data/sqlite.db");
+// export const orm = drizzle({ client, schema, relations: schema.relations, casing: 'snake_case' });
+export const orm = drizzle({ client, schema, relations: schema.relations, casing: "snake_case" });
 
-export const db = drizzle(client, { schema });
+if (serverConfig.autoMigrate) {
+	try {
+		await migrate(orm, { migrationsFolder: "migrations" });
+	} catch (error) {
+		console.error("Failed to run database migrations:", error);
+		throw error;
+	}
+}

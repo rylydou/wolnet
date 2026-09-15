@@ -1,20 +1,20 @@
 @layer base, theme, components, utilities;
 
-@import 'reset.css' layer(base);
+@import "reset.css" layer(base);
 /* @import "vars.css" layer(theme); */
 
-@import 'components/form.css' layer(components);
+@import "components/form.css" layer(components);
 
 /* @import "fonts/hyperlegible.css"; */
-@import 'fonts/chunky.css';
+@import "fonts/chunky.css";
 
 @layer theme {
 	html {
-		--font-sans: 'hyperlegible', ui-sans-serif, sans-serif;
-		--font-mono: 'JetBrains Mono', 'Iosevka', 'Fira Code', 'Fira Mono', ui-monospace, monospace;
+		--font-sans: "hyperlegible", ui-sans-serif, sans-serif;
+		--font-mono: "JetBrains Mono", "Iosevka", "Fira Code", "Fira Mono", ui-monospace, monospace;
 
 		/* background-color: teal; */
-		background-image: url('$lib/assets/images/bg-checker.png');
+		background-image: url("$lib/assets/images/bg-checker.png");
 		background-size: calc(8px * var(--pixel-scale));
 		image-rendering: pixelated;
 
@@ -26,7 +26,7 @@
 		/* font-size: calc(12px * 2); */
 		line-height: 1rem;
 		/* font-family: var(--font-sans); */
-		font-family: 'chunky', monospace;
+		font-family: "chunky", monospace;
 
 		user-select: none;
 
@@ -59,7 +59,7 @@
 	.btn {
 		border-width: calc(3px * var(--pixel-scale));
 		border-style: solid;
-		border-image: url('$lib/assets/images/button.png') 3 stretch;
+		border-image: url("$lib/assets/images/button.png") 3 stretch;
 		background: white;
 		background-clip: padding-box;
 		padding-inline: calc(8px * var(--pixel-scale));
@@ -87,7 +87,7 @@
 		height: calc(22px * var(--pixel-scale));
 		color: black;
 
-		&[type='number'] {
+		&[type="number"] {
 			text-align: right;
 		}
 
@@ -246,7 +246,7 @@
 			appearance: none;
 			border: none;
 			border-radius: 0;
-			background-image: url('$lib/assets/images/range-thumb.png');
+			background-image: url("$lib/assets/images/range-thumb.png");
 			background-position: center;
 			background-size: cover;
 			background-clip: padding-box;
@@ -261,7 +261,7 @@
 			appearance: none;
 			border: none;
 			border-radius: 0;
-			background-image: url('$lib/assets/images/range-thumb.png');
+			background-image: url("$lib/assets/images/range-thumb.png");
 			background-position: center;
 			background-size: cover;
 			background-clip: padding-box;

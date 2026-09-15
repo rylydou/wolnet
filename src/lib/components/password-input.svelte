@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Toggle } from '.';
+	import { Toggle } from ".";
 
 	interface Props {
 		value?: string;
@@ -7,14 +7,14 @@
 		[key: string]: any;
 	}
 
-	let { value = $bindable(''), reveal_password = $bindable(false), ...rest }: Props = $props();
+	let { value = $bindable(""), reveal_password = $bindable(false), ...rest }: Props = $props();
 </script>
 
 <div class="relative tooltip-trigger">
 	<input
-		type={reveal_password ? 'text' : 'password'}
+		type={reveal_password ? "text" : "password"}
 		class="input input-password w-full h-full pr-10"
-		placeholder={reveal_password ? 'Password will be visible!!' : 'Password will be hidden'}
+		placeholder={reveal_password ? "Password will be visible!!" : "Password will be hidden"}
 		bind:value
 		{...rest}
 	/>
@@ -29,7 +29,7 @@
 
 		{#snippet children()}
 			<div class="tooltip">
-				{reveal_password ? 'Hide password' : 'Show password'}
+				{reveal_password ? "Hide password" : "Show password"}
 			</div>
 		{/snippet}
 	</Toggle>

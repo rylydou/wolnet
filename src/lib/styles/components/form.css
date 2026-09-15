@@ -41,7 +41,7 @@
 			will-change: rotate;
 			background-color: currentColor;
 			width: 32px;
-			content: '';
+			content: "";
 			text-align: center;
 		}
 

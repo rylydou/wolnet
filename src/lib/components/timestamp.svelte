@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatLongDate, futureDate } from '$lib/util';
+	import { formatLongDate, futureDate } from "$lib/util";
 
 	interface Props {
 		date: Date;
@@ -8,8 +8,8 @@
 
 	let { date = $bindable(), relative = false }: Props = $props();
 
-	let str = $state('␠');
-	const intl = new Intl.RelativeTimeFormat(undefined, { style: 'short', numeric: 'auto' });
+	let str = $state("␠");
+	const intl = new Intl.RelativeTimeFormat(undefined, { style: "short", numeric: "auto" });
 
 	$effect(() => {
 		if (relative) {
@@ -19,22 +19,22 @@
 			const abs = Math.abs(delta);
 
 			if (abs < 60) {
-				str = 'just now';
+				str = "just now";
 				setTimeout(update, deltaMS);
 			} else if (abs < 60 * 60) {
-				str = intl.format(Math.floor(delta / 60), 'minute');
+				str = intl.format(Math.floor(delta / 60), "minute");
 				setTimeout(update, 60_000);
 			} else if (abs < 60 * 60 * 24) {
-				str = intl.format(Math.floor(delta / 60 / 60), 'hour');
+				str = intl.format(Math.floor(delta / 60 / 60), "hour");
 				setTimeout(update, 3_600_000);
 			} else if (date.getUTCFullYear() < now.getUTCFullYear()) {
 				str = date.toLocaleDateString(undefined, {
-					year: 'numeric',
-					month: 'short',
-					day: 'numeric',
+					year: "numeric",
+					month: "short",
+					day: "numeric",
 				});
-			} else if (date > futureDate(new Date(), '-1day')) {
-				str = 'Yesterday';
+			} else if (date > futureDate(new Date(), "-1day")) {
+				str = "Yesterday";
 			} else {
 				str = formatLongDate(date);
 			}
