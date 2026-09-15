@@ -8,23 +8,19 @@
 		"build": "bun run --bun vite build",
 		"preview": "bun run --bun vite preview",
 		"prepare": "bun run --bun svelte-kit sync || echo ''",
-		"check": "bun run --bun svelte-kit sync && bun run --bun svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "bun run --bun svelte-kit sync && bun run --bun svelte-check --tsconfig ./tsconfig.json --watch",
-		"lint": "prettier --check .",
 		"format": "prettier --write .",
-		"db:push": "drizzle-kit push",
-		"db:generate": "drizzle-kit generate",
-		"db:migrate": "drizzle-kit migrate",
-		"db:studio": "drizzle-kit studio"
+		"db:push": "bun run --bun drizzle-kit push",
+		"db:generate": "bun run --bun drizzle-kit generate",
+		"db:migrate": "bun run --bun drizzle-kit migrate",
+		"db:studio": "bun run --bun drizzle-kit studio"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/kit": "^2.70.3",
 		"@sveltejs/vite-plugin-svelte": "^7.3.0",
-		"@types/better-sqlite3": "^9.6.0",
 		"@types/bun": "^1.4.2",
 		"@types/ms": "^2.1.0",
-		"@types/node": "^26.5.1",
+		"@types/node": "^26.6.0",
 		"dayjs": "^1.11.23",
 		"drizzle-kit": "^1.0.0-rc.5-ab785fc",
 		"drizzle-orm": "^1.0.0-rc.5-ab785fc",
@@ -35,16 +31,8 @@
 		"prettier-plugin-svelte": "^4.1.1",
 		"svelte": "^5.57.0",
 		"svelte-adapter-bun": "^1.0.1",
-		"svelte-check": "^4.7.6",
 		"typescript": "^7.0.2",
 		"vite": "^8.3.0",
 		"zod": "^4.6.5"
-	},
-	"imports": {
-		"#lib": "./src/lib/index.js",
-		"#lib/*": "./src/lib/*"
-	},
-	"dependencies": {
-		"better-sqlite3": "^13.0.3"
 	}
 }

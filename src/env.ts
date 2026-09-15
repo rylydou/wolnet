@@ -1,5 +1,9 @@
 import { defineEnvVars } from "@sveltejs/kit/env";
+import z from "zod";
 
 export const variables = defineEnvVars({
-	DATABASE_URL: { description: "The database connection string." },
+	WOL_DB_AUTO_MIGRATE: {
+		description: "Whether to automatically migrate the database.",
+		schema: z.stringbool().default(true),
+	},
 });
