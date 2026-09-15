@@ -106,10 +106,6 @@
 		}
 	}
 
-	.device-name {
-		user-select: text;
-	}
-
 	.device-address {
 		user-select: text;
 	}

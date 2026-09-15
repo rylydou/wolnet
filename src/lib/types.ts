@@ -9,5 +9,4 @@ export type Device = {
 	lastWokenAt?: Date;
 	createdAt: Date;
 	updatedAt: Date;
-	deletedAt?: Date;
 };

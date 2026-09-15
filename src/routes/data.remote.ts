@@ -1,8 +1,9 @@
 import { form, query } from "$app/server";
 import { invalid } from "@sveltejs/kit";
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { orm, schema } from "$lib/server/db";
 import {
+	DeviceConflict,
 	deleteDeviceById,
 	deviceChanged,
 	deviceInput,
@@ -23,13 +24,23 @@ export const getDevices = query.live(async function* () {
 	}
 });
 
+/** A duplicate hostname, IP or MAC is something the form can fix, so it reads back as a form error. */
+const reportConflicts = async <Result>(write: () => Promise<Result>) => {
+	try {
+		return await write();
+	} catch (error) {
+		if (error instanceof DeviceConflict) invalid(error.message);
+		throw error;
+	}
+};
+
 export const createDevice = form(deviceInput, async (data) => {
-	await insertDevice(data);
+	await reportConflicts(() => insertDevice(data));
 });
 
 export const updateDevice = form(deviceInput.extend({ id: z.string().nonempty() }), async ({ id, ...data }) => {
 	// The device may have been removed between the list being rendered and this submission.
-	if (!(await updateDeviceById(id, data))) invalid("That device no longer exists.");
+	if (!(await reportConflicts(() => updateDeviceById(id, data)))) invalid("That device no longer exists.");
 });
 
 export const deleteDevice = form(z.object({ id: z.string().nonempty() }), async ({ id }) => {
@@ -41,7 +52,7 @@ export const wakeDevice = form(z.object({ id: z.string().nonempty() }), async ({
 	const [device] = await orm
 		.select({ macAddress: schema.devices.macAddress })
 		.from(schema.devices)
-		.where(and(eq(schema.devices.id, id), isNull(schema.devices.deletedAt)));
+		.where(eq(schema.devices.id, id));
 
 	if (!device) invalid("That device no longer exists.");
 	if (device.macAddress == null) invalid("This device has no MAC address set, so it can't be woken.");

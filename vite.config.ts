@@ -1,5 +1,5 @@
-import adapter from "@sveltejs/adapter-auto";
 import { sveltekit } from "@sveltejs/kit/vite";
+import adapter from "svelte-adapter-bun";
 import { defineConfig } from "vite";
 
 export default defineConfig({
@@ -11,9 +11,8 @@ export default defineConfig({
 				experimental: { async: true },
 			},
 
-			// adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.
-			// If your environment is not supported, or you settled on a specific environment, switch out the adapter.
-			// See https://svelte.dev/docs/kit/adapters for more information about adapters.
+			// The app ships as a standalone Bun server (see `Dockerfile`), so the target is fixed
+			// rather than detected. See https://svelte.dev/docs/kit/adapters for other adapters.
 			adapter: adapter(),
 			experimental: { remoteFunctions: true, explicitEnvironmentVariables: true },
 		}),

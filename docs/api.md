@@ -27,9 +27,13 @@ answers as soon as the packet is sent).
 
 ## Device list
 
+- `GET /api/devices` — lists every device on the list, oldest first, as `{ "devices": [ … ] }`.
 - `POST|PATCH /api/add-device` — adds a device, or modifies the one already matching the given
   hostname or MAC address. Responds `201` with the new device, or `200` with the updated one.
   Accepts `hostname`, `macAddress`, `ip` and `comment`; at least one of the first three is
-  required. Fields left out are cleared, so a call always describes the device in full.
+  required. The two verbs differ only in what happens to an existing device:
+  - `POST` **replaces** it — fields left out are cleared, so the call describes it in full.
+  - `PATCH` **merges** — fields left out keep their stored value. Clearing one therefore needs a
+    `POST`, since a blank field reads as "not given".
 - `POST|DELETE /api/remove-device/{device-hostname-or-mac}` — removes a device from the list.
   Responds with `{ "removed": { … } }`.

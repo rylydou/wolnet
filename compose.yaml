@@ -1,0 +1,23 @@
+services:
+  wol-server:
+    build: .
+    image: wol-server
+    container_name: wol-server
+    restart: unless-stopped
+
+    # Wake-on-LAN sends UDP broadcasts, which don't escape Docker's bridge network - the container
+    # shares the host's network stack so magic packets actually land on the LAN. That also means
+    # `ports:` doesn't apply: the server is reachable on the host's own PORT (3000 by default).
+    network_mode: host
+    environment:
+      PORT: 3000
+
+    # `/data` (WOL_DATA_DIR, set in the Dockerfile) is where the SQLite database lives - the same
+    # role `data/` in the project root plays during development. A named volume keeps it owned by
+    # the container's unprivileged user; swap in `- ./data:/data` to keep the files next to this
+    # file instead, which needs that directory to be writable by uid 1000.
+    volumes:
+      - data:/data
+
+volumes:
+  data:

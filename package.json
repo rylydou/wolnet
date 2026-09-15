@@ -9,13 +9,13 @@
 		"preview": "bun run --bun vite preview",
 		"prepare": "bun run --bun svelte-kit sync || echo ''",
 		"format": "prettier --write .",
+		"cli": "bun run --bun src/cli/index.ts",
 		"db:push": "bun run --bun drizzle-kit push",
 		"db:generate": "bun run --bun drizzle-kit generate",
 		"db:migrate": "bun run --bun drizzle-kit migrate",
 		"db:studio": "bun run --bun drizzle-kit studio"
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/kit": "^2.70.3",
 		"@sveltejs/vite-plugin-svelte": "^7.3.0",
 		"@types/bun": "^1.4.2",
@@ -34,5 +34,8 @@
 		"typescript": "^7.0.2",
 		"vite": "^8.3.0",
 		"zod": "^4.6.5"
+	},
+	"bin": {
+		"wolnet": "./src/cli/index.ts"
 	}
 }

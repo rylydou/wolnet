@@ -6,4 +6,9 @@ export const variables = defineEnvVars({
 		description: "Whether to automatically migrate the database.",
 		schema: z.stringbool().default(true),
 	},
+	WOL_DATA_DIR: {
+		description:
+			"Directory holding persistent state (the SQLite database). Defaults to `data/` in the project root; the Docker image sets it to `/data`.",
+		schema: z.string().default("data"),
+	},
 });

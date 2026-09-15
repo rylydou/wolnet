@@ -74,7 +74,11 @@
 		});
 
 	const deviceAddress = (device: Device) =>
-		[device.hostname, device.ip, device.macAddress === undefined ? undefined : formatMacAddress(device.macAddress)]
+		[
+			...(device.comment ? [] : [device.hostname]),
+			device.ip,
+			device.macAddress === undefined ? undefined : formatMacAddress(device.macAddress),
+		]
 			.filter(Boolean)
 			.join(" / ");
 </script>
@@ -159,9 +163,11 @@
 									class:device-status--online={device.status === "online"}
 									title={device.status === "online" ? "Online" : "Offline"}
 								></span>
-								{device.comment || deviceAddress(device) || device.id}
+								<span style="user-select: text;">
+									{device.comment || device.hostname || device.id}
+								</span>
 							</div>
-							<span class="device-address">{deviceAddress(device) || "No address"}</span>
+							<span class="device-address">{deviceAddress(device) || "< no address >"}</span>
 						</div>
 
 						<div class="device-controls">

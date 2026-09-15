@@ -1,4 +1,4 @@
-import { eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { isHostReachable } from "./net/probe";
 import { orm, schema } from "./db";
 
@@ -15,8 +15,7 @@ let started = false;
 const poll = async (onChange: () => void) => {
 	const devices = await orm
 		.select({ id: schema.devices.id, ip: schema.devices.ip, status: schema.devices.status })
-		.from(schema.devices)
-		.where(isNull(schema.devices.deletedAt));
+		.from(schema.devices);
 
 	const results = await Promise.all(
 		devices.map(async (device) => ({

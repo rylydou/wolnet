@@ -13,13 +13,12 @@ export const devices = d.table(
 			.timestamp()
 			.notNull()
 			.$default(() => new Date()),
-		deletedAt: d.timestamp(),
 
 		id: d.text().notNull().unique(),
 		hostname: d.text().unique(),
 		ip: d.text().unique(), // Can be either IPv4 or IPv6
 		macAddress: d.integer().unique(), // 6 byte unsigned integer representing the MAC address
-		comment: d.text(),
+		comment: d.text().notNull().default(""),
 
 		status: d
 			.text({ enum: ["online", "offline"] })

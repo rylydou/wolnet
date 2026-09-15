@@ -1,4 +1,4 @@
-import { and, eq, isNull, or } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { orm, schema } from "./db";
 import { newSecret } from "./config";
 import { startDeviceStatusMonitor } from "./device-status";
@@ -46,15 +46,9 @@ export const toDevice = (row: DeviceRow): Device => ({
 	updatedAt: row.updatedAt,
 });
 
-export const selectDevices = async () => {
-	const rows = await orm
-		.select()
-		.from(schema.devices)
-		.where(isNull(schema.devices.deletedAt))
-		.orderBy(schema.devices.createdAt);
+export const selectDeviceRows = () => orm.select().from(schema.devices).orderBy(schema.devices.createdAt);
 
-	return rows.map(toDevice);
-};
+export const selectDevices = async () => (await selectDeviceRows()).map(toDevice);
 
 /**
  * Blank text inputs submit `""` rather than being omitted, so treat that as "not provided"
@@ -77,12 +71,13 @@ export const deviceInput = z.object({
 export type DeviceInput = z.infer<typeof deviceInput>;
 
 /**
- * Maps validated input onto device columns. A field left blank becomes an explicit `null` rather
- * than `undefined`, because Drizzle omits `undefined` columns from an `UPDATE` entirely, which
- * would quietly keep the old value instead of clearing it.
+ * Maps validated input onto device columns. A field left blank becomes an explicit empty value
+ * rather than `undefined`, because Drizzle omits `undefined` columns from an `UPDATE` entirely,
+ * which would quietly keep the old value instead of clearing it.
  */
 export const toDeviceColumns = (data: DeviceInput) => ({
-	comment: data.comment ?? null,
+	// `comment` is `NOT NULL DEFAULT ''`, so a blank one clears to the empty string, not `null`.
+	comment: data.comment ?? "",
 	hostname: data.hostname ?? null,
 	ip: data.ip ?? null,
 	// The schema already rejected malformed addresses, so the parse cannot fail here.
@@ -90,8 +85,8 @@ export const toDeviceColumns = (data: DeviceInput) => ({
 });
 
 /**
- * Finds a live device by any of the handles a caller might know it by - its id, its hostname, or
- * its MAC address in any of the accepted spellings.
+ * Finds a device by any of the handles a caller might know it by - its id, its hostname, or its
+ * MAC address in any of the accepted spellings.
  */
 export const findDevice = async (identifier: string) => {
 	const macAddress = parseMacAddress(identifier);
@@ -100,49 +95,93 @@ export const findDevice = async (identifier: string) => {
 		.select()
 		.from(schema.devices)
 		.where(
-			and(
-				isNull(schema.devices.deletedAt),
-				or(
-					eq(schema.devices.id, identifier),
-					eq(schema.devices.hostname, identifier),
-					...(macAddress === undefined ? [] : [eq(schema.devices.macAddress, macAddress)]),
-				),
+			or(
+				eq(schema.devices.id, identifier),
+				eq(schema.devices.hostname, identifier),
+				...(macAddress === undefined ? [] : [eq(schema.devices.macAddress, macAddress)]),
 			),
 		);
 
 	return device;
 };
 
+type DeviceColumns = ReturnType<typeof toDeviceColumns>;
+
+/**
+ * The same columns with the fields the caller left out dropped entirely, so an update merges into
+ * the stored device rather than replacing it. Drizzle omits `undefined` columns from an `UPDATE`,
+ * which is exactly the "leave this one alone" behaviour a merge wants.
+ */
+export const toPartialDeviceColumns = (data: DeviceInput) => {
+	const columns: Partial<DeviceColumns> = toDeviceColumns(data);
+	for (const key of Object.keys(columns) as (keyof DeviceColumns)[]) {
+		if (data[key] === undefined) delete columns[key];
+	}
+
+	return columns;
+};
+
+/** Raised when a write would give two devices the same hostname, IP or MAC address. */
+export class DeviceConflict extends Error {}
+
+/** The columns a device is identified by, named the way someone reading the message would say it. */
+const UNIQUE_COLUMN_LABELS: Record<string, string> = {
+	hostname: "hostname",
+	ip: "IP address",
+	mac_address: "MAC address",
+};
+
+/**
+ * SQLite reports a duplicate as `UNIQUE constraint failed: devices.<column>`, which is accurate but
+ * not something to show anyone. Recognised collisions become a `DeviceConflict`; anything else is a
+ * genuine fault and is left to propagate untouched.
+ */
+const withConflicts = async <Result>(write: () => Promise<Result>) => {
+	try {
+		return await write();
+	} catch (error) {
+		const [, column] = /UNIQUE constraint failed: devices\.(\w+)/.exec(String((error as Error)?.cause ?? error)) ?? [];
+		const label = column === undefined ? undefined : UNIQUE_COLUMN_LABELS[column];
+		if (label === undefined) throw error;
+
+		throw new DeviceConflict(`Another device already uses that ${label}.`);
+	}
+};
+
 export const insertDevice = async (data: DeviceInput) => {
-	const [device] = await orm
-		.insert(schema.devices)
-		.values({ id: newSecret(), ...toDeviceColumns(data) })
-		.returning();
+	const [device] = await withConflicts(() =>
+		orm
+			.insert(schema.devices)
+			.values({ id: newSecret(), ...toDeviceColumns(data) })
+			.returning(),
+	);
 
 	notifyDeviceChange();
 	return device;
 };
 
-/** Returns the updated row, or `undefined` if the device was removed in the meantime. */
-export const updateDeviceById = async (id: string, data: DeviceInput) => {
-	const [device] = await orm
-		.update(schema.devices)
-		.set({ ...toDeviceColumns(data), updatedAt: new Date() })
-		.where(and(eq(schema.devices.id, id), isNull(schema.devices.deletedAt)))
-		.returning();
+/**
+ * Returns the updated row, or `undefined` if the device was removed in the meantime. `merge` keeps
+ * the fields the caller left out; without it the data given describes the device in full.
+ */
+export const updateDeviceById = async (id: string, data: DeviceInput, { merge = false } = {}) => {
+	const columns = merge ? toPartialDeviceColumns(data) : toDeviceColumns(data);
+
+	const [device] = await withConflicts(() =>
+		orm
+			.update(schema.devices)
+			.set({ ...columns, updatedAt: new Date() })
+			.where(eq(schema.devices.id, id))
+			.returning(),
+	);
 
 	if (device) notifyDeviceChange();
 	return device;
 };
 
-/** Soft-deletes the device so its history is kept but it drops out of every live listing. */
+/** Drops the device's row. Returns `undefined` if it was already gone. */
 export const deleteDeviceById = async (id: string) => {
-	const now = new Date();
-	const [device] = await orm
-		.update(schema.devices)
-		.set({ deletedAt: now, updatedAt: now })
-		.where(and(eq(schema.devices.id, id), isNull(schema.devices.deletedAt)))
-		.returning();
+	const [device] = await orm.delete(schema.devices).where(eq(schema.devices.id, id)).returning();
 
 	if (device) notifyDeviceChange();
 	return device;
