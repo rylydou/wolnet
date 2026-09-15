@@ -4,6 +4,7 @@
 /* @import "vars.css" layer(theme); */
 
 @import "components/form.css" layer(components);
+@import "components/toaster.css" layer(components);
 
 /* @import "fonts/hyperlegible.css"; */
 @import "fonts/chunky.css";
@@ -14,7 +15,7 @@
 		--font-mono: "JetBrains Mono", "Iosevka", "Fira Code", "Fira Mono", ui-monospace, monospace;
 
 		/* background-color: teal; */
-		background-image: url("$lib/assets/images/bg-checker.png");
+		/* background-image: url("$lib/assets/images/bg-checker.png"); */
 		background-size: calc(8px * var(--pixel-scale));
 		image-rendering: pixelated;
 
@@ -23,20 +24,108 @@
 		accent-color: var(--color-accent);
 
 		font-size: calc(16px * var(--pixel-scale));
-		/* font-size: calc(12px * 2); */
-		line-height: 1rem;
-		/* font-family: var(--font-sans); */
+		line-height: 1;
 		font-family: "chunky", monospace;
 
 		user-select: none;
+		text-rendering: geometricPrecision;
+		/* 1. Turn off font smoothing / antialiasing */
+		-webkit-font-smoothing: none;
+		-moz-osx-font-smoothing: unset;
+		font-smooth: never; /* Note: non-standard but used by some engines */
+
+		/* 2. Enforce crisp rendering for layout blocks */
+		text-rendering: optimizeSpeed;
 
 		--pixel-scale: 2;
 	}
 }
 
 @layer base {
+	.layout,
+	.dash-layout {
+		margin-inline: auto;
+		padding-top: calc(8px * var(--pixel-scale));
+		width: min(calc(400px * var(--pixel-scale)), 100vw);
+	}
+
+	.dash-header {
+		& h1 {
+			font-weight: bold;
+			font-size: calc(32px * var(--pixel-scale));
+		}
+	}
+
+	.dash-header-controls {
+	}
+
+	.device-list {
+		display: flex;
+		flex-direction: column;
+		list-style: none;
+	}
+
+	.device {
+		display: flex;
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: start;
+		gap: calc(2px * var(--pixel-scale));
+		border-bottom: solid calc(1px * var(--pixel-scale)) black;
+		padding-block: calc(8px * var(--pixel-scale)) calc(12px * var(--pixel-scale));
+
+		&:first-child {
+			padding-top: 0;
+		}
+
+		&:last-child {
+			border-bottom: none;
+			padding-bottom: 0;
+		}
+	}
+
+	.device-info {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.device-status {
+		display: inline-block;
+		vertical-align: center;
+		background-image: url("$lib/assets/images/device-status-offline.png");
+		background-position: center;
+		background-size: cover;
+		background-clip: padding-box;
+		background-color: transparent;
+		image-rendering: pixelated;
+		min-width: calc(16px * var(--pixel-scale));
+		min-height: calc(16px * var(--pixel-scale));
+
+		&.device-status--online {
+			background-image: url("$lib/assets/images/device-status-online.png");
+		}
+	}
+
+	.device-name {
+		user-select: text;
+	}
+
+	.device-address {
+		user-select: text;
+	}
+
+	.device-controls {
+		display: flex;
+		flex-direction: row;
+		justify-content: flex-end;
+		gap: calc(2px * var(--pixel-scale));
+
+		& .btn {
+			width: calc(60px * var(--pixel-scale));
+		}
+	}
+
 	.window_frame {
-		margin: calc(8px * var(--pixel-scale));
 		border: solid calc(1px * var(--pixel-scale)) black;
 		border-bottom: solid calc(2px * var(--pixel-scale)) black;
 		background-clip: padding-box;
@@ -46,13 +135,46 @@
 		image-rendering: pixelated;
 
 		& > .window_titlebar {
+			position: relative;
 			border-bottom: solid calc(1px * var(--pixel-scale)) black;
 			padding: 0 calc(6px * var(--pixel-scale));
 			text-align: center;
+
+			& > .window_titlebar_controls {
+				position: absolute;
+				top: 0;
+				right: 0;
+				bottom: 0;
+
+				& > button {
+					outline: none;
+					padding-inline: 16px 12px;
+					/* aspect-ratio: 1/1; */
+					height: 100%;
+					text-align: center;
+
+					&:is(:hover, :focus-visible) {
+						background-color: black;
+						color: white;
+					}
+				}
+			}
 		}
 
 		& > .window_content {
 			padding: calc(8px * var(--pixel-scale));
+		}
+	}
+
+	dialog.window_frame {
+		/* width: min(calc(400px * var(--pixel-scale)), 100vw);
+		height: min(calc(300px * var(--pixel-scale)), 100vh); */
+		margin: auto;
+		outline: none;
+		user-select: none;
+
+		&::backdrop {
+			background-color: rgba(0 0 0 / 0.75);
 		}
 	}
 
@@ -69,6 +191,11 @@
 		text-align: center;
 		text-align: center;
 		text-decoration: none;
+
+		&.compact {
+			padding-inline: calc(4px * var(--pixel-scale));
+			min-height: calc(18px * var(--pixel-scale));
+		}
 
 		&:active {
 			filter: invert(1);

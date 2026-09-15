@@ -54,3 +54,27 @@
 		rotate: 90deg;
 	}
 }
+
+.fieldset-error {
+	margin-top: calc(2px * var(--pixel-scale));
+	background-color: black;
+	padding: 0 calc(4px * var(--pixel-scale));
+	width: max-content;
+	max-width: 100%;
+	color: white;
+}
+
+.fieldset-hint:popover-open {
+	position: fixed;
+	inset: auto;
+	top: anchor(bottom);
+	left: anchor(left);
+	margin-top: calc(2px * var(--pixel-scale));
+	box-shadow: 0 0 0 calc(1px * var(--pixel-scale)) white;
+	border: none;
+	background-color: black;
+	padding: 0 8px;
+	width: max-content;
+	max-width: anchor-size(width);
+	color: white;
+}

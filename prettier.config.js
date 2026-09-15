@@ -5,7 +5,7 @@ const config = {
 	singleQuote: false,
 	trailingComma: "all",
 	printWidth: 120,
-	plugins: ["prettier-plugin-svelte"],
+	plugins: ["prettier-plugin-svelte", "prettier-plugin-css-order"],
 	overrides: [{ files: "*.svelte", options: { parser: "svelte" } }],
 };
 
