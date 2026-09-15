@@ -121,6 +121,69 @@
 		}
 	}
 
+	.scan-window {
+		width: min(calc(320px * var(--pixel-scale)), calc(100vw - 16px * var(--pixel-scale)));
+	}
+
+	/* A scan can turn up far more devices than the list does, so the results scroll on their own
+	   and leave the title bar and the footer button in place. */
+	.scan-body {
+		max-height: min(calc(240px * var(--pixel-scale)), 60vh);
+		overflow-y: auto;
+	}
+
+	.scan-footer {
+		display: flex;
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		gap: calc(4px * var(--pixel-scale));
+		border-top: solid calc(1px * var(--pixel-scale)) black;
+		padding: calc(4px * var(--pixel-scale)) calc(8px * var(--pixel-scale));
+	}
+
+	.scan-note {
+		opacity: 0.5;
+	}
+
+	/* The whole row is the control - clicking anywhere on a discovered device opens the add form
+	   pre-filled with it, rather than making the user aim at a small button. */
+	.discovered {
+		display: flex;
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		gap: calc(4px * var(--pixel-scale));
+		outline: none;
+		border-bottom: solid calc(1px * var(--pixel-scale)) gray;
+		background: none;
+		padding: calc(6px * var(--pixel-scale)) calc(8px * var(--pixel-scale));
+		width: 100%;
+		text-align: left;
+
+		&:is(:hover, :focus-visible):not(:disabled) {
+			background-color: black;
+			color: white;
+		}
+
+		&:disabled {
+			color: lightgray;
+		}
+	}
+
+	.device-list > li:last-child > .discovered {
+		border-bottom: none;
+	}
+
+	/* Which protocols turned the device up - useful context, but secondary to its name. */
+	.discovered-source {
+		opacity: 0.5;
+	}
+
+	.discovered-action {
+		flex-shrink: 0;
+	}
+
 	.window_frame {
 		border: solid calc(1px * var(--pixel-scale)) black;
 		border-bottom: solid calc(2px * var(--pixel-scale)) black;

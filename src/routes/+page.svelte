@@ -1,18 +1,28 @@
 <script lang="ts">
 	import { toast } from "$lib/common/toasts";
 	import { Field, Window } from "$lib/components";
-	import type { Device } from "$lib/types";
+	import type { Device, DeviceDefaults, DiscoveredDevice, DiscoverySource } from "$lib/types";
 	import { formatMacAddress } from "$lib/util";
 	import type { RemoteFormField } from "@sveltejs/kit";
 	import { tick } from "svelte";
-	import { createDevice, deleteDevice, getDevices, updateDevice, wakeDevice } from "./data.remote";
+	import { createDevice, deleteDevice, discoverDevices, getDevices, updateDevice, wakeDevice } from "./data.remote";
 
 	/** The four editable fields, which `createDevice` and `updateDevice` share. */
 	type DeviceFields = Record<"comment" | "hostname" | "macAddress" | "ip", RemoteFormField<string>>;
 
 	let addDeviceDialog = $state<HTMLDialogElement>();
 	let editDeviceDialog = $state<HTMLDialogElement>();
+	let scanDialog = $state<HTMLDialogElement>();
 	let editingDevice = $state<Device>();
+
+	/** Seeds the add form, so a device picked out of a scan arrives with its fields filled in. */
+	let addDeviceDefaults = $state<DeviceDefaults>();
+
+	// A scan takes a few seconds and talks to the whole network, so the query is only created once
+	// the dialog has been opened - merely loading the page shouldn't start one. Re-opening the dialog
+	// reuses the cached result rather than re-scanning; `scan.refresh()` is what deliberately re-runs.
+	let scanOpen = $state(false);
+	const scan = $derived(scanOpen ? discoverDevices() : undefined);
 
 	const devices = getDevices();
 
@@ -81,13 +91,79 @@
 		]
 			.filter(Boolean)
 			.join(" / ");
+
+	/**
+	 * Opens the add form, optionally pre-filled - which is how a scan result becomes a device.
+	 *
+	 * `as(...)` seeds each input's *default* value rather than its current one, so on a dialog that
+	 * has been opened before the inputs keep whatever they last held. Resetting the form once the new
+	 * defaults have rendered is what makes them show: it pulls every input back to its default, which
+	 * both fills in a device picked from a scan and clears one left over from the previous time.
+	 */
+	const openAddDevice = async (defaults?: DeviceDefaults) => {
+		addDeviceDefaults = defaults;
+		addDeviceDialog?.showModal();
+
+		await tick();
+		createDevice.element?.reset();
+	};
+
+	const openScan = () => {
+		scanOpen = true;
+		scanDialog?.showModal();
+	};
+
+	/**
+	 * Hands a discovered device to the add form. Its UPnP name becomes the comment, since that is the
+	 * name a person gave the device, while the mDNS hostname is the name the device answers to.
+	 */
+	const addDiscovered = (found: DiscoveredDevice) => {
+		scanDialog?.close();
+		openAddDevice({
+			comment: found.name,
+			hostname: found.hostname,
+			ip: found.ip,
+			macAddress: found.macAddress,
+		});
+	};
+
+	// The scan is a snapshot, so a device added from it would still look unknown until the next one.
+	// Cross-referencing the live device list instead keeps the "Added" marker correct straight away.
+	const isAdded = (found: DiscoveredDevice) =>
+		found.knownDeviceId !== undefined ||
+		(devices.ready &&
+			devices.current.some(
+				(device) =>
+					(found.macAddress !== undefined && device.macAddress === found.macAddress) || device.ip === found.ip,
+			));
+
+	const discoveredName = (found: DiscoveredDevice) => found.name || found.hostname || found.ip;
+
+	/** How each protocol is worth naming to someone reading the list, rather than its internal key. */
+	const sourceLabels: Record<DiscoverySource, string> = {
+		arp: "ARP",
+		mdns: "mDNS",
+		ssdp: "UPnP",
+	};
+
+	const discoveredFrom = (found: DiscoveredDevice) => found.sources.map((source) => sourceLabels[source]).join(", ");
+
+	const discoveredAddress = (found: DiscoveredDevice) =>
+		[
+			found.name && found.hostname ? found.hostname : undefined,
+			found.ip,
+			found.macAddress === undefined ? undefined : formatMacAddress(found.macAddress),
+		]
+			.filter(Boolean)
+			.join(" / ");
 </script>
 
 <!--
 	Shared by both dialogs. `device` seeds each input's default value, so the edit form opens
-	populated and a native reset restores the saved values rather than blanking the form.
+	populated and a native reset restores the saved values rather than blanking the form. The add
+	form passes the values carried over from a scan, which is what pre-fills it.
 -->
-{#snippet deviceFields(fields: DeviceFields, device?: Device)}
+{#snippet deviceFields(fields: DeviceFields, device?: DeviceDefaults)}
 	<Field issues={fields.hostname.issues()}>
 		{#snippet label()}
 			Device Hostname
@@ -136,9 +212,9 @@
 	<header class="dash-header">
 		<h1>WolNet - Devices</h1>
 		<div class="dash-header-controls">
-			<button class="btn" onclick={() => addDeviceDialog?.showModal()}>Add Device...</button>
+			<button class="btn" onclick={() => openAddDevice()}>Add Device...</button>
+			<button class="btn" onclick={openScan}>Scan Network...</button>
 			<!-- <button class="btn">Manage WolNet...</button> -->
-			<!-- <button class="btn">Scan Network for Devices...</button> -->
 		</div>
 	</header>
 
@@ -190,7 +266,15 @@
 	</Window>
 </main>
 
-<dialog class="window_frame" bind:this={addDeviceDialog} onclose={() => createDevice.element?.reset()}>
+<!-- Clearing the defaults on close stops a device picked from a scan seeding the next manual add. -->
+<dialog
+	class="window_frame"
+	bind:this={addDeviceDialog}
+	onclose={() => {
+		createDevice.element?.reset();
+		addDeviceDefaults = undefined;
+	}}
+>
 	<div class="window_titlebar">
 		Add Device...
 		<div class="window_titlebar_controls">
@@ -199,7 +283,10 @@
 	</div>
 
 	<form {...addDevice} style="padding-inline: 12px; padding-block: 16px;">
-		{@render deviceFields(createDevice.fields)}
+		<!-- Re-keying rebuilds the inputs, so new defaults win over whatever was typed before. -->
+		{#key addDeviceDefaults}
+			{@render deviceFields(createDevice.fields, addDeviceDefaults)}
+		{/key}
 
 		{#each createDevice.fields.issues() ?? [] as issue (issue.message)}
 			<p class="fieldset-error" role="alert">{issue.message}</p>
@@ -244,5 +331,71 @@
 				{deleteDevice.for(editing.device.id).pending > 0 ? "Deleting..." : "Delete Device"}
 			</button>
 		</form>
+	{/if}
+</dialog>
+
+<!--
+	Dropping `scanOpen` on close releases the query, so the scan isn't kept alive by a hidden dialog.
+	Re-opening serves the cached result; "Scan Again" is the only thing that touches the network.
+-->
+<dialog class="window_frame scan-window" bind:this={scanDialog} onclose={() => (scanOpen = false)}>
+	<div class="window_titlebar">
+		Scan Network...
+		<div class="window_titlebar_controls">
+			<button aria-label="Close" onclick={() => scanDialog?.close()}>X</button>
+		</div>
+	</div>
+
+	{#if scan}
+		<div class="scan-body">
+			{#if scan.error}
+				<p>Could not scan the network. {scan.error.message}</p>
+			{:else if !scan.ready}
+				<p>Scanning the network for devices...</p>
+				<p class="scan-note">This takes a few seconds while every address is checked.</p>
+			{:else if scan.current.devices.length === 0}
+				<p>No devices answered.</p>
+				<p class="scan-note">
+					{scan.current.subnets.length === 0
+						? "No local network was found to scan."
+						: `Nothing replied on ${scan.current.subnets.join(", ")}.`}
+				</p>
+			{:else}
+				<ul class="device-list">
+					{#each scan.current.devices as found (found.ip)}
+						{@const added = isAdded(found)}
+						<li>
+							<button
+								class="discovered"
+								type="button"
+								disabled={added}
+								title={added ? "Already in your device list." : ""}
+								onclick={() => addDiscovered(found)}
+							>
+								<span class="device-info">
+									{#if found.name}
+										<span class="device-name">{found.name}</span>
+									{/if}
+									<span class="device-address">{discoveredAddress(found)}</span>
+									<span class="discovered-source">Discovered from: {discoveredFrom(found)}</span>
+								</span>
+								<span class="discovered-action">{added ? "Added" : "Add"}</span>
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</div>
+
+		<div class="scan-footer">
+			<span class="scan-note">
+				{#if scan.ready && scan.current.subnets.length > 0}
+					Scanned {scan.current.subnets.join(", ")}
+				{/if}
+			</span>
+			<button class="btn compact" onclick={() => scan.refresh()} disabled={!scan.ready}>
+				{scan.ready ? "Scan Again" : "Scanning..."}
+			</button>
+		</div>
 	{/if}
 </dialog>

@@ -12,6 +12,7 @@ import {
 	selectDevices,
 	updateDeviceById,
 } from "$lib/server/devices";
+import { scanNetwork } from "$lib/server/discovery";
 import { sendMagicPacket } from "$lib/server/wol";
 import z from "zod";
 
@@ -23,6 +24,13 @@ export const getDevices = query.live(async function* () {
 		await changed;
 	}
 });
+
+/**
+ * Sweeps the local network and reports what answered. A scan takes a few seconds of mostly waiting,
+ * so it is a `query` rather than a live one: it runs when the scan dialog is opened and re-runs only
+ * when the user asks for it again via `.refresh()`.
+ */
+export const discoverDevices = query(async () => await scanNetwork());
 
 /** A duplicate hostname, IP or MAC is something the form can fix, so it reads back as a form error. */
 const reportConflicts = async <Result>(write: () => Promise<Result>) => {
