@@ -46,12 +46,12 @@
 	.dash-layout {
 		margin-inline: auto;
 		padding-top: calc(8px * var(--pixel-scale));
-		width: min(calc(400px * var(--pixel-scale)), 100vw);
+		width: min(calc(400px * var(--pixel-scale)), calc(100vw - 16px * var(--pixel-scale)));
 	}
 
 	.dash-header {
 		& h1 {
-			font-weight: bold;
+			/* font-weight: bold; */
 			font-size: calc(32px * var(--pixel-scale));
 		}
 	}

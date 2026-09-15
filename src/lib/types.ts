@@ -1,6 +1,6 @@
 export type Device = {
 	id: string;
-	name: string;
+	comment?: string;
 	hostname?: string;
 	ip?: string;
 	macAddress?: number;

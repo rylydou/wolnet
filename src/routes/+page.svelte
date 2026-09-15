@@ -5,10 +5,10 @@
 	import { formatMacAddress } from "$lib/util";
 	import type { RemoteFormField } from "@sveltejs/kit";
 	import { tick } from "svelte";
-	import { createDevice, getDevices, updateDevice, wakeDevice } from "./data.remote";
+	import { createDevice, deleteDevice, getDevices, updateDevice, wakeDevice } from "./data.remote";
 
 	/** The four editable fields, which `createDevice` and `updateDevice` share. */
-	type DeviceFields = Record<"name" | "hostname" | "macAddress" | "ip", RemoteFormField<string>>;
+	type DeviceFields = Record<"comment" | "hostname" | "macAddress" | "ip", RemoteFormField<string>>;
 
 	let addDeviceDialog = $state<HTMLDialogElement>();
 	let editDeviceDialog = $state<HTMLDialogElement>();
@@ -19,8 +19,6 @@
 	// Replaces the default `enhance` behaviour, which only resets the form, so that a successful
 	// submission also dismisses the dialog and confirms itself.
 	const addDevice = createDevice.enhance(async (form) => {
-		const name = form.fields.name.value();
-
 		if (!(await form.submit())) return;
 
 		// The reset event fires before the inputs are updated, so let the DOM settle first.
@@ -28,7 +26,7 @@
 		form.element.reset();
 		addDeviceDialog?.close();
 
-		toast(`Added ${name}.`);
+		toast("Added device.");
 	});
 
 	// `for(id)` gives each device its own form instance, so the values and validation issues from
@@ -44,12 +42,10 @@
 			device,
 			form,
 			props: form.enhance(async (instance) => {
-				const name = instance.fields.name.value();
-
 				if (!(await instance.submit())) return;
 
 				editDeviceDialog?.close();
-				toast(`Saved ${name}.`);
+				toast("Saved device.");
 			}),
 		};
 	});
@@ -59,12 +55,22 @@
 		editDeviceDialog?.showModal();
 	};
 
+	// `for(id)` gives each device its own form instance, matching the pattern used for edit and wake.
+	const removeDevice = (device: Device) =>
+		deleteDevice.for(device.id).enhance(async (form) => {
+			if (!confirm(`Delete ${device.comment || deviceAddress(device) || device.id}? This cannot be undone.`)) return;
+			if (!(await form.submit())) return;
+
+			editDeviceDialog?.close();
+			toast("Deleted device.");
+		});
+
 	// `for(id)` reuses the same instance across renders, so `pending` reflects an in-flight wake
 	// even though this is called fresh from the markup on every device.
 	const wake = (device: Device) =>
 		wakeDevice.for(device.id).enhance(async (form) => {
 			if (!(await form.submit())) return;
-			toast(`Sent wake signal to ${device.name}.`);
+			toast(`Sent wake signal to ${device.comment || deviceAddress(device) || device.id}.`);
 		});
 
 	const deviceAddress = (device: Device) =>
@@ -78,14 +84,6 @@
 	populated and a native reset restores the saved values rather than blanking the form.
 -->
 {#snippet deviceFields(fields: DeviceFields, device?: Device)}
-	<Field issues={fields.name.issues()}>
-		{#snippet label()}
-			Device Name*
-		{/snippet}
-		{#snippet input()}
-			<input class="input" {...fields.name.as("text", device?.name ?? "")} />
-		{/snippet}
-	</Field>
 	<Field issues={fields.hostname.issues()}>
 		{#snippet label()}
 			Device Hostname
@@ -97,9 +95,6 @@
 	<Field issues={fields.macAddress.issues()}>
 		{#snippet label()}
 			MAC Address
-		{/snippet}
-		{#snippet hint()}
-			Six hex pairs, such as 00:1a:2b:3c:4d:5e.
 		{/snippet}
 		{#snippet input()}
 			<input
@@ -119,6 +114,14 @@
 			<input class="input" {...fields.ip.as("text", device?.ip ?? "")} />
 		{/snippet}
 	</Field>
+	<Field issues={fields.comment.issues()}>
+		{#snippet label()}
+			Comment
+		{/snippet}
+		{#snippet input()}
+			<input class="input" {...fields.comment.as("text", device?.comment ?? "")} />
+		{/snippet}
+	</Field>
 {/snippet}
 
 <svelte:head>
@@ -127,7 +130,7 @@
 
 <main class="dash-layout">
 	<header class="dash-header">
-		<h1>Wake on LAN - Devices</h1>
+		<h1>WolNet - Devices</h1>
 		<div class="dash-header-controls">
 			<button class="btn" onclick={() => addDeviceDialog?.showModal()}>Add Device...</button>
 			<!-- <button class="btn">Manage WolNet...</button> -->
@@ -156,7 +159,7 @@
 									class:device-status--online={device.status === "online"}
 									title={device.status === "online" ? "Online" : "Offline"}
 								></span>
-								{device.name}
+								{device.comment || deviceAddress(device) || device.id}
 							</div>
 							<span class="device-address">{deviceAddress(device) || "No address"}</span>
 						</div>
@@ -221,6 +224,18 @@
 
 			<button class="btn" style="width: 100%; margin-top: 12px;" type="submit" disabled={editing.form.pending > 0}>
 				{editing.form.pending > 0 ? "Saving..." : "Save"}
+			</button>
+		</form>
+
+		<form {...removeDevice(editing.device)} style="padding-inline: 12px; padding-block-end: 16px;">
+			<input type="hidden" name="id" value={editing.device.id} />
+			<button
+				class="btn compact"
+				style="width: 100%;"
+				type="submit"
+				disabled={deleteDevice.for(editing.device.id).pending > 0}
+			>
+				{deleteDevice.for(editing.device.id).pending > 0 ? "Deleting..." : "Delete Device"}
 			</button>
 		</form>
 	{/if}
