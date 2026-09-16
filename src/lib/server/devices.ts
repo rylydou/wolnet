@@ -1,4 +1,4 @@
-import { eq, or } from "drizzle-orm";
+import { and, eq, ne, or } from "drizzle-orm";
 import { orm, schema } from "./db";
 import { newSecret } from "./config";
 import { startDeviceStatusMonitor } from "./device-status";
@@ -190,6 +190,23 @@ export const deleteDeviceById = async (id: string) => {
 export const markDeviceWoken = async (id: string) => {
 	await orm.update(schema.devices).set({ lastWokenAt: new Date() }).where(eq(schema.devices.id, id));
 	notifyDeviceChange();
+};
+
+/**
+ * Records that a device was seen answering, so the list reflects a confirmed wake immediately
+ * rather than at the next sweep of the background monitor. Only writes when the status actually
+ * flips, keeping `statusChangedAt` meaning "when it came up" rather than "when it was last looked
+ * at".
+ */
+export const markDeviceOnline = async (id: string) => {
+	const [device] = await orm
+		.update(schema.devices)
+		.set({ status: "online", statusChangedAt: new Date() })
+		.where(and(eq(schema.devices.id, id), ne(schema.devices.status, "online")))
+		.returning();
+
+	if (device) notifyDeviceChange();
+	return device;
 };
 
 /**

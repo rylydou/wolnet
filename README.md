@@ -37,8 +37,8 @@ bun run cli add --hostname my-desktop.local --mac 00:1a:2b:3c:4d:5e
 bun run cli wake my-desktop.local
 ```
 
-`--server nas.local:3000` (or `-s`) runs any command against another instance, and `WOL_SERVER_URL`
-changes the default from `http://localhost:3000`. See
+`--server nas.local:3333` (or `-s`) runs any command against another instance, and `WOL_SERVER_URL`
+changes the default from `http://localhost:3333`. See
 [`docs/cli.md`](docs/cli.md) for the full command list, or run `wolnet help`.
 
 ## Docker
@@ -47,7 +47,7 @@ changes the default from `http://localhost:3000`. See
 docker compose up -d --build
 ```
 
-The app is then on port 3000 of the host. Two things about the container are worth knowing:
+The app is then on port 3333 of the host. Two things about the container are worth knowing:
 
 - **Host networking.** Wake-on-LAN is a UDP broadcast, and broadcasts don't cross Docker's bridge
   network, so the container shares the host's network stack in order to reach the LAN. That is also

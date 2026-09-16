@@ -85,7 +85,7 @@
 
 	const deviceAddress = (device: Device) =>
 		[
-			...(device.comment ? [] : [device.hostname]),
+			...(device.comment ? [device.hostname] : []),
 			device.ip,
 			device.macAddress === undefined ? undefined : formatMacAddress(device.macAddress),
 		]
@@ -240,7 +240,7 @@
 									title={device.status === "online" ? "Online" : "Offline"}
 								></span>
 								<span style="user-select: text;">
-									{device.comment || device.hostname || device.id}
+									{device.comment || device.hostname || device.ip || device.macAddress || device.id}
 								</span>
 							</div>
 							<span class="device-address">{deviceAddress(device) || "< no address >"}</span>

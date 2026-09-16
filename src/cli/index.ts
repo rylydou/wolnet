@@ -12,7 +12,8 @@ import { parseArgs } from "node:util";
 const USAGE = `wolnet - wake devices on your network
 
 Usage:
-  wolnet wake <hostname|mac> [--wait <seconds>]   Wake a known device, or any MAC address
+  wolnet wake <hostname|mac> [--wait <seconds>]   Wake a known device, or any MAC address, and
+                                                  wait until it answers (default 120s)
   wolnet add [--hostname <name>] [--mac <address>] [--ip <address>] [--comment <text>] [--replace]
                                                   Add a device, or update a matching one
   wolnet remove <hostname|mac>                    Remove a device            (aliases: rm)
@@ -24,7 +25,7 @@ Options:
       --replace                    Make \`add\` describe the device in full: fields left out are
                                    cleared, instead of being left as they are.`;
 
-const DEFAULT_PORT = 3000;
+const DEFAULT_PORT = 3333;
 
 /** `nas.local`, `nas.local:8080` and `https://wol.example.com` all name an instance to talk to. */
 const toBaseUrl = (server: string) =>
@@ -38,7 +39,10 @@ const request = async (path: string, init?: RequestInit) => {
 	let response: Response;
 	try {
 		response = await fetch(new URL(path, baseUrl), init);
-	} catch {
+	} catch (cause) {
+		// A `wake` waits for the device to boot, so a timeout here is the server still working, not a
+		// server that isn't there - saying "is it running?" would send someone looking the wrong way.
+		if ((cause as Error)?.name === "TimeoutError") throw new Error(`${baseUrl} didn't answer in time.`);
 		throw new Error(`Could not reach a server at ${baseUrl}. Is it running?`);
 	}
 
@@ -72,19 +76,34 @@ const readIdentifier = (args: string[], usage: string) => {
 	return positionals[0]!;
 };
 
+/** Mirrors the server's own default, so the client stops waiting a little after the server does. */
+const DEFAULT_WAIT_SECONDS = 120;
+
+/** Grace on top of the wait, covering the first reachability probe and the round trip. */
+const WAIT_SLACK_MS = 15_000;
+
 const wake = async (args: string[]) => {
 	const { positionals, values } = parseArgs({ args, options: { wait: { type: "string" } }, allowPositionals: true });
 	if (positionals.length !== 1) throw new Error("Usage: wolnet wake <hostname|mac> [--wait <seconds>]");
 
 	const identifier = positionals[0]!;
-	const wait = values.wait === undefined ? "" : `?wait=${encodeURIComponent(values.wait)}`;
-	const result = await request(`/api/wake/${encodeURIComponent(identifier)}${wait}`, { method: "POST" });
+	const waitSeconds = values.wait === undefined ? DEFAULT_WAIT_SECONDS : Number(values.wait);
+	if (!Number.isFinite(waitSeconds) || waitSeconds < 0) throw new Error("`--wait` must be a number of seconds.");
+
+	// The server holds the request open until the device answers, so this can legitimately take
+	// minutes. Say so up front - on stderr, so piping the command still yields only its result.
+	console.error(`Waking ${identifier}, waiting up to ${waitSeconds}s for it to come online...`);
+
+	const result = await request(`/api/wake/${encodeURIComponent(identifier)}?wait=${waitSeconds}`, {
+		method: "POST",
+		signal: AbortSignal.timeout(waitSeconds * 1000 + WAIT_SLACK_MS),
+	});
 
 	if (result.alreadyOnline) console.log(`${identifier} is already online.`);
 	else if (result.confirmed) console.log(`${identifier} is awake.`);
+	else if (result.device?.ip) console.log(`Sent a wake packet to ${identifier}.`);
 	// Without an IP there is nothing to probe, so a sent packet is as much as can ever be reported.
-	else if (result.device?.ip) console.log(`Woke ${identifier}, but it hasn't answered yet.`);
-	else console.log(`Sent a wake packet to ${identifier}.`);
+	else console.log(`Sent a wake packet to ${identifier}. It has no IP address, so it can't be confirmed.`);
 };
 
 const add = async (args: string[]) => {

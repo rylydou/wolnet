@@ -12,9 +12,14 @@ A device can be referred to by its hostname, its MAC address (`00:1a:2b:3c:4d:5e
 - `GET|POST /api/wake/{device-mac}` — wakes any device by MAC address. It does not have to be on
   the list; an unknown MAC is still sent a magic packet, it just can't be confirmed afterwards.
 
-If the device has an IP, it is probed first and, after the packet goes out, polled until it answers
-— so a response means it is genuinely up. `?wait=<seconds>` sets that window (default `30`, `0`
-answers as soon as the packet is sent).
+The request is held open until the device is actually online. A device with an IP is probed first —
+if it already answers, the response comes back immediately and no packet is sent — and otherwise
+polled every two seconds after the packet goes out, so a `200` means it is genuinely up.
+`?wait=<seconds>` sets how long to poll (default `120`); a device that never answers within it is a
+`504`.
+
+A `202` is the one case that can't be confirmed: the packet went out, but there is nothing to probe
+— either the MAC isn't on the list, the device has no IP address, or `?wait=0` waived the wait.
 
 ```jsonc
 {

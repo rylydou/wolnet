@@ -23,10 +23,10 @@ COPY --from=build /app/migrations ./migrations
 # Persistent state lives on a volume rather than in the image's writable layer.
 ENV NODE_ENV=production \
 	WOL_DATA_DIR=/data \
-	PORT=3000
+	PORT=3333
 RUN mkdir -p /data && chown bun:bun /data
 VOLUME /data
 
 USER bun
-EXPOSE 3000
+EXPOSE 3333
 CMD ["bun", "run", "./build/index.js"]
