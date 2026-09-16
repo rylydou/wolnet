@@ -10,16 +10,21 @@ A device can be referred to by its hostname, its MAC address (`00:1a:2b:3c:4d:5e
 
 - `GET|POST /api/wake/{device-hostname}` — wakes a known device from the list.
 - `GET|POST /api/wake/{device-mac}` — wakes any device by MAC address. It does not have to be on
-  the list; an unknown MAC is still sent a magic packet, it just can't be confirmed afterwards.
+  the list.
 
-The request is held open until the device is actually online. A device with an IP is probed first —
-if it already answers, the response comes back immediately and no packet is sent — and otherwise
-polled every two seconds after the packet goes out, so a `200` means it is genuinely up.
-`?wait=<seconds>` sets how long to poll (default `120`); a device that never answers within it is a
-`504`.
+The request is held open until the device is actually online. It is checked first — if it already
+answers, the response comes back immediately and no packet is sent — and otherwise polled every two
+seconds after the packet goes out, so a `200` means it is genuinely up. `?wait=<seconds>` sets how
+long to poll (default `120`); a device that never answers within it is a `504`.
 
-A `202` is the one case that can't be confirmed: the packet went out, but there is nothing to probe
-— either the MAC isn't on the list, the device has no IP address, or `?wait=0` waived the wait.
+A MAC address is enough on its own: a device is looked for on the local network by ARP, which needs
+no IP address and works even when the device refuses every port. So a device with no IP address on
+record, or one that isn't on the list at all, is confirmed like any other. `?wait=0` is the only
+case that goes unconfirmed, and answers `202` — the packet went out, nothing was checked.
+
+ARP does not cross a router, so a device on another network can't be confirmed that way; one with an
+IP address on record falls back to probing it, which does work off-segment (though Wake-on-LAN
+itself doesn't).
 
 ```jsonc
 {

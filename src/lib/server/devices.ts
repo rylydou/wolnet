@@ -3,6 +3,7 @@ import { orm, schema } from "./db";
 import { newSecret } from "./config";
 import { startDeviceStatusMonitor } from "./device-status";
 import { isHostReachable } from "./net/probe";
+import { isMacOnline } from "./net/presence";
 import type { Device } from "$lib/types";
 import { MAC_ADDRESS_PATTERN, parseMacAddress } from "$lib/util";
 import z from "zod";
@@ -209,14 +210,45 @@ export const markDeviceOnline = async (id: string) => {
 	return device;
 };
 
+/** All a presence check needs to know about a device: a MAC address to look for, an IP to probe. */
+export type DeviceAddress = Pick<DeviceRow, "ip" | "macAddress">;
+
+/**
+ * Whether the device is answering on the network right now. A MAC address on its own is enough, and
+ * is the better signal where there is a choice - see `net/presence` for why - so the IP address is
+ * only probed when ARP has nothing to say about the device.
+ */
+export const isDeviceOnline = async ({ ip, macAddress }: DeviceAddress, { sweep = false } = {}) => {
+	if (macAddress !== null) {
+		const hints = ip === null ? undefined : new Map([[macAddress, ip]]);
+		if (await isMacOnline(macAddress, { hints, sweep })) return true;
+	}
+
+	return ip !== null && (await isHostReachable(ip));
+};
+
+/**
+ * How often a wait may sweep the subnet looking for a device it has no address for. A sweep takes a
+ * few seconds, so it can't run on every round of a poll that ticks every two.
+ */
+const WAIT_SWEEP_INTERVAL_MS = 15_000;
+
 /**
  * Polls a device until it answers, so a caller can treat the response as "it's actually up" rather
  * than "a packet went out". Resolves `false` if it never answers within `timeoutMs`.
  */
-export const waitUntilReachable = async (ip: string, { timeoutMs = 60_000, intervalMs = 2_000 } = {}) => {
+export const waitUntilOnline = async (device: DeviceAddress, { timeoutMs = 60_000, intervalMs = 2_000 } = {}) => {
 	const deadline = Date.now() + timeoutMs;
+	let lastSweepAt = 0;
+
 	while (true) {
-		if (await isHostReachable(ip)) return true;
+		// A device with no IP address on record can only be placed by a sweep, at least until it turns
+		// up in the neighbour table by itself - which a device that has just booted usually does, since
+		// joining a network means a DHCP exchange and a gratuitous ARP announcement.
+		const sweep = device.ip === null && Date.now() - lastSweepAt >= WAIT_SWEEP_INTERVAL_MS;
+		if (sweep) lastSweepAt = Date.now();
+
+		if (await isDeviceOnline(device, { sweep })) return true;
 		if (Date.now() >= deadline) return false;
 		await Bun.sleep(intervalMs);
 	}

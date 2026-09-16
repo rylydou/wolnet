@@ -1,8 +1,7 @@
 import { error, json, type RequestHandler } from "@sveltejs/kit";
 import { toDeviceResponse } from "$lib/server/api";
-import { findDevice, markDeviceOnline, markDeviceWoken, waitUntilReachable } from "$lib/server/devices";
+import { findDevice, isDeviceOnline, markDeviceOnline, markDeviceWoken, waitUntilOnline } from "$lib/server/devices";
 import { sendMagicPacket } from "$lib/server/wol";
-import { isHostReachable } from "$lib/server/net/probe";
 import { parseMacAddress } from "$lib/util";
 
 /**
@@ -35,9 +34,9 @@ const send = async (macAddress: number) => {
  * Wakes a device known by hostname, id or MAC address and answers only once it is actually
  * answering on the network: one that is already up replies straight away without a packet being
  * sent, a woken one replies when it comes up, and one that never answers within the wait is a
- * `504` rather than a cheerful "packet sent". A device with no IP address is the case that can't
- * be confirmed either way - there is nothing to probe - so it answers `202`, saying plainly that
- * the packet went out unseen.
+ * `504` rather than a cheerful "packet sent". A MAC address is enough to confirm a wake on its own,
+ * so a device with no IP address on record - or one that isn't on the list at all - is confirmed
+ * like any other; only `?wait=0` leaves a wake unconfirmed, and answers `202`.
  */
 const wake: RequestHandler = async ({ params, url }) => {
 	const identifier = params.identifier!;
@@ -48,9 +47,21 @@ const wake: RequestHandler = async ({ params, url }) => {
 		const macAddress = parseMacAddress(identifier);
 		if (macAddress === undefined) error(404, `No device known as "${identifier}", and it isn't a MAC address.`);
 
+		// Nothing on the list matches, so there is no device to report alongside the result - but a MAC
+		// address is all a presence check needs, so the wake itself can still be confirmed.
+		const address = { ip: null, macAddress };
+		if (await isDeviceOnline(address, { sweep: true })) {
+			return json({ woken: false, alreadyOnline: true, confirmed: true });
+		}
+
 		await send(macAddress);
-		// Nothing on the list matches, so there's no address to confirm the wake against.
-		return json({ woken: true, alreadyOnline: false, confirmed: false }, { status: 202 });
+		if (waitMs === 0) return json({ woken: true, alreadyOnline: false, confirmed: false }, { status: 202 });
+
+		if (!(await waitUntilOnline(address, { timeoutMs: waitMs }))) {
+			error(504, `Woke ${identifier}, but it was still not answering after ${Math.round(waitMs / 1000)}s.`);
+		}
+
+		return json({ woken: true, alreadyOnline: false, confirmed: true });
 	}
 
 	// `markDeviceOnline` only writes when the status actually flips, so it answers `undefined` for a
@@ -59,7 +70,8 @@ const wake: RequestHandler = async ({ params, url }) => {
 	const respond = (body: Record<string, unknown>, status = 200) =>
 		json({ ...body, device: toDeviceResponse(current) }, { status });
 
-	if (device.ip && (await isHostReachable(device.ip))) {
+	// Sweeping is worth the few seconds it costs only for a device with no address to check directly.
+	if (await isDeviceOnline(device, { sweep: device.ip === null })) {
 		current = (await markDeviceOnline(device.id)) ?? current;
 		return respond({ woken: false, alreadyOnline: true, confirmed: true });
 	}
@@ -69,10 +81,10 @@ const wake: RequestHandler = async ({ params, url }) => {
 	await send(device.macAddress);
 	await markDeviceWoken(device.id);
 
-	// Without an address to probe, or with the wait waived, a sent packet is all there is to report.
-	if (!device.ip || waitMs === 0) return respond({ woken: true, alreadyOnline: false, confirmed: false }, 202);
+	// With the wait waived, a sent packet is all there is to report.
+	if (waitMs === 0) return respond({ woken: true, alreadyOnline: false, confirmed: false }, 202);
 
-	if (!(await waitUntilReachable(device.ip, { timeoutMs: waitMs }))) {
+	if (!(await waitUntilOnline(device, { timeoutMs: waitMs }))) {
 		error(504, `Woke ${identifier}, but it was still not answering after ${Math.round(waitMs / 1000)}s.`);
 	}
 
