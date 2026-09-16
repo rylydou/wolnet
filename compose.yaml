@@ -1,8 +1,8 @@
 services:
-  wol-server:
+  wolnet:
     build: .
-    image: wol-server
-    container_name: wol-server
+    image: wolnet
+    container_name: wolnet
     restart: unless-stopped
 
     # Wake-on-LAN sends UDP broadcasts, which don't escape Docker's bridge network - the container
