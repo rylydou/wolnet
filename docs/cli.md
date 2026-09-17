@@ -12,7 +12,7 @@
   - `wolnet devices`: Lists currently known devices. Aliases: list, ls
 
 - Global flags
-  - `--server {server-hostname:optional-port}`: Runs the command against another WolNet instance instead of the local one. Port `3333` is assumed, and `WOL_SERVER_URL` sets the default. Aliases: -s
+  - `--server {server-hostname:optional-port}`: Runs the command against another WolNet instance instead of the local one. Port `8778` is assumed, and `WOL_SERVER_URL` sets the default. Aliases: -s
   - `--replace`: Makes `add` describe the device in full, clearing the fields left out, rather than merging into the one already on the list.
 
 <!-- - WolNet Mangement

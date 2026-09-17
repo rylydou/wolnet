@@ -20,13 +20,22 @@ WORKDIR /app
 COPY --from=build /app/build ./build
 COPY --from=build /app/migrations ./migrations
 
+# Runs the adapter's server with the origin fix in `server.js`; see the comment there.
+COPY --from=build /app/server.js ./server.js
+
 # Persistent state lives on a volume rather than in the image's writable layer.
 ENV NODE_ENV=production \
 	WOL_DATA_DIR=/data \
-	PORT=3333
+	PORT=8778
 RUN mkdir -p /data && chown bun:bun /data
 VOLUME /data
 
-USER bun
-EXPOSE 3333
-CMD ["bun", "run", "./build/index.js"]
+# The entrypoint runs as root just long enough to make the data directory writable - a bind-mounted
+# host directory arrives with the host's ownership, which the chown above cannot reach - and then
+# drops to `bun` with su-exec. The server process itself never runs as root.
+RUN apk add --no-cache su-exec
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+EXPOSE 8778
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["bun", "run", "./server.js"]

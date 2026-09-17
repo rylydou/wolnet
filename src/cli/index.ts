@@ -25,7 +25,7 @@ Options:
       --replace                    Make \`add\` describe the device in full: fields left out are
                                    cleared, instead of being left as they are.`;
 
-const DEFAULT_PORT = 3333;
+const DEFAULT_PORT = 8778;
 
 /** `nas.local`, `nas.local:8080` and `https://wol.example.com` all name an instance to talk to. */
 const toBaseUrl = (server: string) =>

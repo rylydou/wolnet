@@ -13,28 +13,22 @@
 	html {
 		--font-sans: "hyperlegible", ui-sans-serif, sans-serif;
 		--font-mono: "JetBrains Mono", "Iosevka", "Fira Code", "Fira Mono", ui-monospace, monospace;
+		background-size: calc(8px * var(--pixel-scale));
 
 		/* background-color: teal; */
 		/* background-image: url("$lib/assets/images/bg-checker.png"); */
-		background-size: calc(8px * var(--pixel-scale));
+		background-color: white;
 		image-rendering: pixelated;
-
 		scrollbar-width: thin;
 		color: var(--color-base-content);
 		accent-color: var(--color-accent);
-
 		font-size: calc(16px * var(--pixel-scale));
 		line-height: 1;
 		font-family: "chunky", monospace;
-
 		user-select: none;
-		text-rendering: geometricPrecision;
-		/* 1. Turn off font smoothing / antialiasing */
 		-webkit-font-smoothing: none;
 		-moz-osx-font-smoothing: unset;
-		font-smooth: never; /* Note: non-standard but used by some engines */
-
-		/* 2. Enforce crisp rendering for layout blocks */
+		font-smooth: never;
 		text-rendering: optimizeSpeed;
 
 		--pixel-scale: 2;

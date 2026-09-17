@@ -7,10 +7,10 @@ services:
 
     # Wake-on-LAN sends UDP broadcasts, which don't escape Docker's bridge network - the container
     # shares the host's network stack so magic packets actually land on the LAN. That also means
-    # `ports:` doesn't apply: the server is reachable on the host's own PORT (3333 by default).
+    # `ports:` doesn't apply: the server is reachable on the host's own PORT (8778 by default).
     network_mode: host
     environment:
-      PORT: 3333
+      PORT: 8778
 
     # `/data` (WOL_DATA_DIR, set in the Dockerfile) is where the SQLite database lives - the same
     # role `data/` in the project root plays during development. A named volume keeps it owned by
