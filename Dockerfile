@@ -23,6 +23,12 @@ COPY --from=build /app/migrations ./migrations
 # Runs the adapter's server with the origin fix in `server.js`; see the comment there.
 COPY --from=build /app/server.js ./server.js
 
+# The `wolnet` CLI is a thin HTTP client (see its own header comment) with no dependencies beyond
+# `node:util`, so it just needs to be on PATH - talking to the server over WOL_SERVER_URL (unset,
+# it defaults to localhost:PORT, i.e. this same container) rather than through the build output.
+COPY --from=build /app/src/cli/index.ts /usr/local/bin/wolnet
+RUN chmod +x /usr/local/bin/wolnet
+
 # Persistent state lives on a volume rather than in the image's writable layer.
 ENV NODE_ENV=production \
 	WOL_DATA_DIR=/data \
