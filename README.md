@@ -72,7 +72,9 @@ work.
   gets lost.
 - **Checking if a device is on:** Every 10 seconds (every 2 while a device is waking), WolNet asks each device
   "who has this IP address?" with `arping`. Every running device answers, even one that blocks ping and every
-  port. For devices on another network, which ARP can't reach, it tries to open a TCP connection instead.
+  port. For devices on another network, which ARP can't reach, it tries to open a TCP connection instead. A
+  device only switches between on and off after 2 checks in a row agree, since Wi-Fi devices miss some checks.
+  Every switch is logged with the reason.
 - **Scanning:** WolNet sends a tiny packet to every address on your network, which fills the system's ARP table
   with every device that's on. mDNS and UPnP add names, like `living-room-pi.local` or "Living Room TV".
 

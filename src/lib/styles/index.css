@@ -110,39 +110,32 @@
 		border-top: solid var(--px) black;
 	}
 
-	/* On narrow screens the buttons wrap under the text instead of squeezing it. */
-	.list-row {
+	/* Device list. On narrow screens the buttons wrap under the text instead of squeezing it. */
+	.device {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: center;
-		gap: calc(4 * var(--px)) calc(6 * var(--px));
-		padding-block: calc(6 * var(--px));
+		justify-content: space-between;
+		align-items: start;
+		gap: calc(2 * var(--px));
+		padding-block: calc(8 * var(--px)) calc(12 * var(--px));
 
-		& > .row {
-			margin-left: auto;
+		&:first-child {
+			padding-top: 0;
+		}
+
+		&:last-child {
+			padding-bottom: 0;
 		}
 	}
 
-	.list > li:first-child > .list-row {
-		padding-top: 0;
-	}
-
-	.list > li:last-child > .list-row {
-		padding-bottom: 0;
-	}
-
-	.list-text {
-		display: flex;
+	.device-info {
 		flex: 1 1 calc(100 * var(--px));
-		flex-direction: column;
-		gap: calc(2 * var(--px));
 		overflow-wrap: anywhere;
 	}
 
-	/* Each detail stays on one line, and they wrap as a whole. */
-	.details {
+	/* "host / ip / mac". Each one stays on one line, and they wrap as a whole. */
+	.device-details {
 		display: flex;
-		column-gap: calc(8 * var(--px));
 		flex-wrap: wrap;
 
 		& > span {
@@ -150,11 +143,28 @@
 			text-overflow: ellipsis;
 			white-space: nowrap;
 		}
+
+		& > span + span::before {
+			content: " / ";
+			white-space: pre;
+		}
+	}
+
+	.device-controls {
+		display: flex;
+		gap: calc(2 * var(--px));
+		margin-left: auto;
+
+		& .btn {
+			width: calc(60 * var(--px));
+		}
 	}
 
 	.status {
-		flex-shrink: 0;
-		align-self: start;
+		display: inline-block;
+		/* `center` puts it in the middle of the line. `middle` is close, for browsers without it. */
+		vertical-align: middle;
+		vertical-align: center;
 		background: url("../assets/images/device-status-offline.png") center / cover;
 		width: calc(16 * var(--px));
 		height: calc(16 * var(--px));
@@ -186,7 +196,7 @@
 
 	dialog.scan-window {
 		container-type: inline-size;
-		width: min(calc(480 * var(--px)), 100% - calc(16 * var(--px)));
+		width: min(calc(400 * var(--px)), 100% - calc(16 * var(--px)));
 	}
 
 	/* Results scroll on their own, so the title bar and footer stay put. */
@@ -261,7 +271,7 @@
 		}
 
 		&:disabled {
-			opacity: 0.4;
+			opacity: 0.25;
 		}
 	}
 

@@ -7,7 +7,7 @@ import type { Device } from "#lib/types.ts";
 import { orm, schema } from "./db/index.ts";
 import type { DeviceRow } from "./db/schema.ts";
 import { notifyChange } from "./events.ts";
-import { checkSoon, statusOf } from "./status.ts";
+import { checkSoon, forgetStatus, statusOf } from "./status.ts";
 
 export type { DeviceRow };
 
@@ -144,6 +144,8 @@ export const edit = async (id: string, input: DeviceInput) => {
 			.where(eq(devices.id, id))
 			.returning(),
 	);
+	// With a new address, the old checks don't count. Start over instead of waiting for checks to agree.
+	if (row && (row.ip !== existing.ip || row.macAddress !== existing.macAddress)) forgetStatus(id);
 	notifyChange();
 	checkSoon();
 	return row;

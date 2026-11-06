@@ -14,7 +14,7 @@ const MAX_WAIT_SECONDS = 240;
  *
  * `{device}` is anything `devices.find` accepts, or any MAC address, even one not on the list.
  */
-export const GET: RequestHandler = async ({ params, url }) => {
+export const GET: RequestHandler = async ({ params, url, request, getClientAddress }) => {
 	const wait = Number(url.searchParams.get("wait") ?? WAKE_TIMEOUT_MS / 1000);
 	if (!Number.isFinite(wait) || wait < 0 || wait > MAX_WAIT_SECONDS) {
 		error(400, `\`wait\` must be a number of seconds from 0 to ${MAX_WAIT_SECONDS}.`);
@@ -27,7 +27,13 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	const label = row ? deviceLabel(devices.toDevice(row)) : formatMacAddress(macAddress!);
 	if (macAddress === null) error(400, `${label} has no MAC address, so it can't be woken.`);
 
-	const result = await wake({ id: row?.id, ip: row?.ip ?? null, macAddress }, wait > 0 ? wait * 1000 : undefined);
+	const result = await wake(
+		{ id: row?.id, ip: row?.ip ?? null, macAddress, label },
+		{
+			from: `${getClientAddress().replace(/^::ffff:/, "")} (${request.headers.get("user-agent") ?? "API"})`,
+			timeoutMs: wait > 0 ? wait * 1000 : undefined,
+		},
+	);
 
 	// Read the device again at the end, so its status is current.
 	const respond = async (status: number, body: { result: string; message: string }) => {

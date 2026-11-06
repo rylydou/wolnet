@@ -12,7 +12,8 @@
 
 import { parseMacAddress } from "#lib/mac.ts";
 
-const REPLY_PATTERN = /reply from [\d.]+ \[([0-9a-f:]{17})\]/i;
+/** Like `Unicast reply from 10.10.1.1 [6C:1F:F7:21:C3:91]  1.952ms`. */
+const REPLY_PATTERN = /reply from [\d.]+ \[([0-9a-f:]{17})\]\s+([\d.]+)ms/i;
 
 /** `arping` exit codes. */
 const NO_REPLY = 1;
@@ -20,8 +21,8 @@ const NO_REPLY = 1;
 export class ArpingError extends Error {}
 
 /**
- * Sends ARP requests to `ip` for up to `timeoutSeconds` and returns the MAC address that
- * answered, or `undefined` if nothing did. Throws `ArpingError` if `arping` can't run at all.
+ * Sends ARP requests to `ip` for up to `timeoutSeconds`. Returns the MAC address that answered and
+ * how long it took, or `undefined` if nothing answered. Throws `ArpingError` if `arping` can't run.
  */
 export const arping = async (ip: string, interfaceName: string, timeoutSeconds = 1) => {
 	let process;
@@ -41,7 +42,7 @@ export const arping = async (ip: string, interfaceName: string, timeoutSeconds =
 	]);
 
 	const reply = REPLY_PATTERN.exec(output);
-	if (reply) return parseMacAddress(reply[1]!);
+	if (reply) return { macAddress: parseMacAddress(reply[1]!)!, ms: Number(reply[2]) };
 	if (exitCode === NO_REPLY) return undefined;
 
 	throw new ArpingError(`\`arping\` failed: ${errors.trim() || `exit code ${exitCode}`}`);

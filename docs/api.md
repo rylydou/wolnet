@@ -25,10 +25,11 @@ another website trying to make changes in your browser.
 curl http://wolnet:8778/api/wake/my-pc
 ```
 
-WolNet sends the wake signal, then waits until the device is on before it answers. If the device is already on,
-it answers right away and doesn't send anything.
+WolNet sends the wake signal, then waits until the device is on before it answers. If the device already shows as
+on, it answers right away. The signal is sent either way, since it does nothing to a device that's awake.
 
-`{device}` can also be any MAC address, even one that isn't on the list.
+`{device}` can also be any MAC address, even one that isn't on the list. WolNet doesn't know yet whether that
+device is on, so it waits for it like any other.
 
 `?wait=<seconds>` sets how long to wait. The default is `120` and the most is `240`. `?wait=0` sends the
 signal and answers right away, without checking.

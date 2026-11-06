@@ -138,24 +138,26 @@
 			<ul class="list">
 				{#each devices.current as device (device.id)}
 					{@const waking = device.status === "waking" || requested.has(device.id)}
-					<li class="list-row">
-						<span
-							class="status status-{waking ? 'waking' : device.status}"
-							role="img"
-							aria-label={STATUS_LABELS[device.status]}
-							title={STATUS_LABELS[device.status]}
-						></span>
-						<div class="list-text">
-							<span class="selectable">{deviceLabel(device)}</span>
-							<span class="details muted selectable">
+					<li class="device">
+						<div class="device-info">
+							<div>
+								<span
+									class="status status-{waking ? 'waking' : device.status}"
+									role="img"
+									aria-label={STATUS_LABELS[device.status]}
+									title={STATUS_LABELS[device.status]}
+								></span>
+								<span class="selectable">{deviceLabel(device)}</span>
+							</div>
+							<div class="device-details selectable">
 								{#each details(device) as detail (detail)}
 									<span>{detail}</span>
 								{:else}
 									<span>No address</span>
 								{/each}
-							</span>
+							</div>
 						</div>
-						<div class="row">
+						<div class="device-controls">
 							<button
 								class="btn compact"
 								disabled={!device.macAddress || waking}
