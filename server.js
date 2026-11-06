@@ -1,40 +1,26 @@
-// Entry point for the production server, in place of the adapter's own `build/index.js`.
+// Starts the production server. Use this instead of running `build/index.js` directly.
 //
-// `svelte-adapter-bun` has to guess the origin it is serving on, and with no TLS to inspect and no
-// reverse proxy to ask it assumes `https://<host header>`. Over plain HTTP that guess is wrong, and
-// SvelteKit then rejects every form submission and remote-function call as cross-site with a 403 -
-// adding, waking and deleting a device all stop working. Remote functions compare the `Origin`
-// header against the server's origin unconditionally, so `csrf.trustedOrigins` cannot relax it and
-// the adapter's `ORIGIN` would pin the app to a single name.
+// The Bun adapter assumes every request came in over HTTPS unless a proxy says otherwise. WolNet is
+// usually reached over plain HTTP (`http://truenas:8778`), and then the browser's `Origin` header
+// (`http://...`) doesn't match the origin SvelteKit expects (`https://...`). SvelteKit treats that
+// as a cross-site request and blocks every form and button in the UI with a 403.
 //
-// Instead, tell the adapter to read the protocol from `x-forwarded-proto` and supply that header
-// ourselves when nothing upstream did. The origin is then derived from the request's own `Host`,
-// so the app answers to whatever name points at it - hostname, IP, Tailscale name - and the
-// cross-site check keeps working, because a foreign `Origin` still fails to match.
+// So: read the protocol from `x-forwarded-proto`, and fill that header in as `http` when no proxy
+// set it. Anything in front of WolNet that speaks HTTPS (like `tailscale serve`) still sets it to
+// `https` itself. A different site still can't fake the browser's `Origin`, so CSRF checks still work.
 process.env.PROTOCOL_HEADER ??= "x-forwarded-proto";
 
-// The adapter builds its server options and calls `Bun.serve` at import time, so wrapping the
-// handler means intercepting that call. Going through the adapter's own entry point this way keeps
-// its port, body-limit, WebSocket and graceful-shutdown handling rather than restating it here.
+// The adapter calls `Bun.serve` as soon as it is imported, so wrap it first. The header is set on
+// the incoming request itself rather than on a copy, because Bun only applies per-request settings
+// (like the adapter turning off the idle timeout for live updates) to the original request.
 const serve = Bun.serve;
-
-Bun.serve = (options) => {
-	const handler = options.fetch;
-
-	return serve({
+Bun.serve = (options) =>
+	serve({
 		...options,
 		fetch(request, server) {
-			// A real proxy in front of us has already said what the browser spoke; only fill in the
-			// header when it is absent, so terminating TLS upstream keeps working.
-			if (!request.headers.has("x-forwarded-proto")) {
-				const headers = new Headers(request.headers);
-				headers.set("x-forwarded-proto", "http");
-				request = new Request(request, { headers });
-			}
-
-			return handler(request, server);
+			if (!request.headers.has("x-forwarded-proto")) request.headers.set("x-forwarded-proto", "http");
+			return options.fetch.call(this, request, server);
 		},
 	});
-};
 
 await import("./build/index.js");

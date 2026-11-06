@@ -1,263 +1,170 @@
 <script lang="ts">
-	import { toast } from "$lib/common/toasts";
-	import { Field, Window } from "$lib/components";
-	import type { Device, DeviceDefaults, DiscoveredDevice, DiscoverySource } from "$lib/types";
-	import { formatMacAddress } from "$lib/util";
-	import type { RemoteFormField } from "@sveltejs/kit";
-	import { tick } from "svelte";
-	import { createDevice, deleteDevice, discoverDevices, getDevices, updateDevice, wakeDevice } from "./data.remote";
+	import { SvelteSet } from "svelte/reactivity";
+	import Dialog from "#lib/components/dialog.svelte";
+	import Field from "#lib/components/field.svelte";
+	import Window from "#lib/components/window.svelte";
+	import { toast, toastError } from "#lib/toasts.svelte.ts";
+	import { deviceLabel, type Device, type DeviceStatus, type DiscoveredDevice } from "#lib/types.ts";
+	import { addDevice, discoverDevices, editDevice, getDevices, removeDevice, wakeDevice } from "./data.remote";
 
-	/** The four editable fields, which `createDevice` and `updateDevice` share. */
-	type DeviceFields = Record<"comment" | "hostname" | "macAddress" | "ip", RemoteFormField<string>>;
-
-	let addDeviceDialog = $state<HTMLDialogElement>();
-	let editDeviceDialog = $state<HTMLDialogElement>();
-	let scanDialog = $state<HTMLDialogElement>();
-	let editingDevice = $state<Device>();
-
-	/** Seeds the add form, so a device picked out of a scan arrives with its fields filled in. */
-	let addDeviceDefaults = $state<DeviceDefaults>();
-
-	// A scan takes a few seconds and talks to the whole network, so the query is only created once
-	// the dialog has been opened - merely loading the page shouldn't start one. Re-opening the dialog
-	// reuses the cached result rather than re-scanning; `scan.refresh()` is what deliberately re-runs.
-	let scanOpen = $state(false);
-	const scan = $derived(scanOpen ? discoverDevices() : undefined);
+	type DeviceFields = Pick<Device, "name" | "hostname" | "macAddress" | "ip">;
 
 	const devices = getDevices();
 
-	// Replaces the default `enhance` behaviour, which only resets the form, so that a successful
-	// submission also dismisses the dialog and confirms itself.
-	const addDevice = createDevice.enhance(async (form) => {
-		if (!(await form.submit())) return;
+	// Each time a form opens it gets a fresh instance (`for(key)`), so it never shows values or
+	// errors left over from last time.
+	let formKey = 0;
 
-		// The reset event fires before the inputs are updated, so let the DOM settle first.
-		await tick();
-		form.element.reset();
-		addDeviceDialog?.close();
+	let adding = $state<{ form: ReturnType<typeof addDevice.for>; values: DeviceFields }>();
+	let editing = $state<{ form: ReturnType<typeof editDevice.for>; device: Device }>();
 
-		toast("Added device.");
+	const openAdd = (values: DeviceFields = {}) => (adding = { form: addDevice.for(`${formKey++}`), values });
+	const openEdit = (device: Device) => (editing = { form: editDevice.for(`${formKey++}`), device });
+
+	// Scanning takes a few seconds, so it only starts once the scan window opens. Opening it again
+	// shows the last result. "Scan Again" runs a new scan.
+	let scanOpen = $state(false);
+	const scan = $derived(scanOpen ? discoverDevices() : undefined);
+
+	/** Devices with a wake request on its way to the server. */
+	const requested = new SvelteSet<string>();
+
+	const wake = async (device: Device) => {
+		requested.add(device.id);
+		try {
+			if ((await wakeDevice(device.id)) === "alreadyOnline") toast(`${deviceLabel(device)} is already on.`);
+		} catch (error) {
+			toastError(error);
+		} finally {
+			requested.delete(device.id);
+		}
+	};
+
+	const remove = async (device: Device) => {
+		if (!confirm(`Delete ${deviceLabel(device)}? This can't be undone.`)) return;
+
+		try {
+			await removeDevice(device.id);
+			editing = undefined;
+			toast(`Deleted ${deviceLabel(device)}.`);
+		} catch (error) {
+			toastError(error);
+		}
+	};
+
+	// Say how each wake turned out once the device stops showing as waking. This also covers wakes
+	// started from the API or CLI, or in another tab.
+	let lastStatuses = new Map<string, DeviceStatus>();
+	$effect(() => {
+		if (!devices.ready) return;
+
+		for (const device of devices.current) {
+			if (lastStatuses.get(device.id) !== "waking" || device.status === "waking") continue;
+
+			toast(
+				device.status === "online"
+					? `${deviceLabel(device)} is awake.`
+					: `${deviceLabel(device)} didn't wake up. Is Wake-on-LAN turned on for it?`,
+				device.status === "online" ? 5_000 : 10_000,
+			);
+		}
+
+		lastStatuses = new Map(devices.current.map((device) => [device.id, device.status]));
 	});
 
-	// `for(id)` gives each device its own form instance, so the values and validation issues from
-	// one edit are never carried over into the next. Unlike the add form there is no reset, because
-	// the inputs should keep showing what was just saved.
-	const editing = $derived.by(() => {
-		const device = editingDevice;
-		if (!device) return undefined;
+	const STATUS_LABELS: Record<DeviceStatus, string> = { online: "On", offline: "Off", waking: "Waking up" };
 
-		const form = updateDevice.for(device.id);
+	/** The details to show under a device's name, minus whichever one is already its name. */
+	const details = (device: Device) =>
+		[device.hostname, device.ip, device.macAddress].filter((detail) => detail && detail !== deviceLabel(device));
 
-		return {
-			device,
-			form,
-			props: form.enhance(async (instance) => {
-				if (!(await instance.submit())) return;
-
-				editDeviceDialog?.close();
-				toast("Saved device.");
-			}),
-		};
-	});
-
-	const editDevice = (device: Device) => {
-		editingDevice = device;
-		editDeviceDialog?.showModal();
-	};
-
-	// `for(id)` gives each device its own form instance, matching the pattern used for edit and wake.
-	const removeDevice = (device: Device) =>
-		deleteDevice.for(device.id).enhance(async (form) => {
-			if (!confirm(`Delete ${device.comment || deviceAddress(device) || device.id}? This cannot be undone.`)) return;
-			if (!(await form.submit())) return;
-
-			editDeviceDialog?.close();
-			toast("Deleted device.");
-		});
-
-	// `for(id)` reuses the same instance across renders, so `pending` reflects an in-flight wake
-	// even though this is called fresh from the markup on every device.
-	const wake = (device: Device) =>
-		wakeDevice.for(device.id).enhance(async (form) => {
-			if (!(await form.submit())) return;
-			toast(`Sent wake signal to ${device.comment || deviceAddress(device) || device.id}.`);
-		});
-
-	const deviceAddress = (device: Device) =>
-		[
-			...(device.comment ? [device.hostname] : []),
-			device.ip,
-			device.macAddress === undefined ? undefined : formatMacAddress(device.macAddress),
-		]
-			.filter(Boolean)
-			.join(" / ");
-
-	/**
-	 * Opens the add form, optionally pre-filled - which is how a scan result becomes a device.
-	 *
-	 * `as(...)` seeds each input's *default* value rather than its current one, so on a dialog that
-	 * has been opened before the inputs keep whatever they last held. Resetting the form once the new
-	 * defaults have rendered is what makes them show: it pulls every input back to its default, which
-	 * both fills in a device picked from a scan and clears one left over from the previous time.
-	 */
-	const openAddDevice = async (defaults?: DeviceDefaults) => {
-		addDeviceDefaults = defaults;
-		addDeviceDialog?.showModal();
-
-		await tick();
-		createDevice.element?.reset();
-	};
-
-	const openScan = () => {
-		scanOpen = true;
-		scanDialog?.showModal();
-	};
-
-	/**
-	 * Hands a discovered device to the add form. Its UPnP name becomes the comment, since that is the
-	 * name a person gave the device, while the mDNS hostname is the name the device answers to.
-	 */
-	const addDiscovered = (found: DiscoveredDevice) => {
-		scanDialog?.close();
-		openAddDevice({
-			comment: found.name,
-			hostname: found.hostname,
-			ip: found.ip,
-			macAddress: found.macAddress,
-		});
-	};
-
-	// The scan is a snapshot, so a device added from it would still look unknown until the next one.
-	// Cross-referencing the live device list instead keeps the "Added" marker correct straight away.
+	/** A scanned device can't be added again if it's already on the list (matched by MAC or IP). */
 	const isAdded = (found: DiscoveredDevice) =>
 		found.knownDeviceId !== undefined ||
 		(devices.ready &&
 			devices.current.some(
-				(device) =>
-					(found.macAddress !== undefined && device.macAddress === found.macAddress) || device.ip === found.ip,
+				(device) => (found.macAddress && device.macAddress === found.macAddress) || device.ip === found.ip,
 			));
 
-	const discoveredName = (found: DiscoveredDevice) => found.name || found.hostname || found.ip;
-
-	/** How each protocol is worth naming to someone reading the list, rather than its internal key. */
-	const sourceLabels: Record<DiscoverySource, string> = {
-		arp: "ARP",
-		mdns: "mDNS",
-		ssdp: "UPnP",
+	const addFound = (found: DiscoveredDevice) => {
+		scanOpen = false;
+		openAdd({ name: found.name, hostname: found.hostname, ip: found.ip, macAddress: found.macAddress });
 	};
-
-	const discoveredFrom = (found: DiscoveredDevice) => found.sources.map((source) => sourceLabels[source]).join(", ");
-
-	const discoveredAddress = (found: DiscoveredDevice) =>
-		[
-			found.name && found.hostname ? found.hostname : undefined,
-			found.ip,
-			found.macAddress === undefined ? undefined : formatMacAddress(found.macAddress),
-		]
-			.filter(Boolean)
-			.join(" / ");
 </script>
 
-<!--
-	Shared by both dialogs. `device` seeds each input's default value, so the edit form opens
-	populated and a native reset restores the saved values rather than blanking the form. The add
-	form passes the values carried over from a scan, which is what pre-fills it.
--->
-{#snippet deviceFields(fields: DeviceFields, device?: DeviceDefaults)}
-	<Field issues={fields.hostname.issues()}>
-		{#snippet label()}
-			Device Hostname
-		{/snippet}
-		{#snippet input()}
-			<input class="input" {...fields.hostname.as("text", device?.hostname ?? "")} />
-		{/snippet}
+{#snippet deviceFields(form: NonNullable<typeof adding | typeof editing>["form"], values: DeviceFields)}
+	<Field label="Name" issues={form.fields.name.issues()}>
+		<input class="input" placeholder="Living Room PC" {...form.fields.name.as("text", values.name ?? "")} />
 	</Field>
-	<Field issues={fields.macAddress.issues()}>
-		{#snippet label()}
-			MAC Address
-		{/snippet}
-		{#snippet input()}
-			<input
-				class="input"
-				{...fields.macAddress.as("text", device?.macAddress === undefined ? "" : formatMacAddress(device.macAddress))}
-			/>
-		{/snippet}
+	<Field label="Hostname" issues={form.fields.hostname.issues()}>
+		<input class="input" placeholder="my-pc.local" {...form.fields.hostname.as("text", values.hostname ?? "")} />
 	</Field>
-	<Field issues={fields.ip.issues()}>
-		{#snippet label()}
-			IP Address
-		{/snippet}
-		{#snippet hint()}
-			Can be IPv4 or IPv6.
-		{/snippet}
-		{#snippet input()}
-			<input class="input" {...fields.ip.as("text", device?.ip ?? "")} />
-		{/snippet}
+	<Field label="MAC Address" issues={form.fields.macAddress.issues()}>
+		<input
+			class="input"
+			placeholder="00:1a:2b:3c:4d:5e"
+			{...form.fields.macAddress.as("text", values.macAddress ?? "")}
+		/>
 	</Field>
-	<Field issues={fields.comment.issues()}>
-		{#snippet label()}
-			Comment
-		{/snippet}
-		{#snippet input()}
-			<input class="input" {...fields.comment.as("text", device?.comment ?? "")} />
-		{/snippet}
+	<Field label="IP Address" issues={form.fields.ip.issues()}>
+		<input class="input" placeholder="192.168.1.20" {...form.fields.ip.as("text", values.ip ?? "")} />
 	</Field>
+	{#each form.fields.issues() ?? [] as issue (issue.message)}
+		<p class="field-error" role="alert">{issue.message}</p>
+	{/each}
 {/snippet}
 
 <svelte:head>
-	<title>Wake on LAN - Devices</title>
+	<title>WolNet</title>
 </svelte:head>
 
-<main class="dash-layout">
-	<header class="dash-header">
-		<h1>WolNet - Devices</h1>
-		<div class="dash-header-controls">
-			<button class="btn" onclick={() => openAddDevice()}>Add Device...</button>
-			<button class="btn" onclick={openScan}>Scan Network...</button>
-			<!-- <button class="btn">Manage WolNet...</button> -->
+<main class="page">
+	<header class="page-header">
+		<h1>WolNet</h1>
+		<div class="row">
+			<button class="btn" onclick={() => openAdd()}>Add Device...</button>
+			<button class="btn" onclick={() => (scanOpen = true)}>Scan Network...</button>
 		</div>
 	</header>
 
-	<Window style="margin-top: calc(8px * var(--pixel-scale));">
-		{#snippet windowTitle()}
-			Devices
-		{/snippet}
+	<Window title="Devices">
 		{#if devices.error}
-			<p>Could not load devices. {devices.error.message}</p>
+			<p>Couldn't load devices. {devices.error.message}</p>
 		{:else if !devices.ready}
 			<p>Loading devices...</p>
 		{:else if devices.current.length === 0}
-			<p>No devices yet. Add one to get started.</p>
+			<p>No devices yet. Add one, or scan the network to find some.</p>
 		{:else}
-			<ul class="device-list">
+			<ul class="list">
 				{#each devices.current as device (device.id)}
-					<li class="device">
-						<div class="device-info">
-							<div class="device-name">
-								<span
-									class="device-status"
-									class:device-status--online={device.status === "online"}
-									title={device.status === "online" ? "Online" : "Offline"}
-								></span>
-								<span style="user-select: text;">
-									{device.comment || device.hostname || device.ip || device.macAddress || device.id}
-								</span>
-							</div>
-							<span class="device-address">{deviceAddress(device) || "< no address >"}</span>
+					{@const waking = device.status === "waking" || requested.has(device.id)}
+					<li class="list-row">
+						<span
+							class="status status-{waking ? 'waking' : device.status}"
+							role="img"
+							aria-label={STATUS_LABELS[device.status]}
+							title={STATUS_LABELS[device.status]}
+						></span>
+						<div class="list-text">
+							<span class="selectable">{deviceLabel(device)}</span>
+							<span class="details muted selectable">
+								{#each details(device) as detail (detail)}
+									<span>{detail}</span>
+								{:else}
+									<span>No address</span>
+								{/each}
+							</span>
 						</div>
-
-						<div class="device-controls">
-							<form {...wake(device)}>
-								<input type="hidden" name="id" value={device.id} />
-								<button
-									class="btn compact"
-									type="submit"
-									disabled={!device.macAddress || wakeDevice.for(device.id).pending > 0}
-								>
-									{wakeDevice.for(device.id).pending > 0 ? "Waking..." : "Wake"}
-								</button>
-							</form>
-							<button class="btn compact" onclick={() => editDevice(device)}>Edit</button>
+						<div class="row">
+							<button
+								class="btn compact"
+								disabled={!device.macAddress || waking}
+								title={device.macAddress ? undefined : "Add a MAC address to wake this device."}
+								onclick={() => wake(device)}
+							>
+								{waking ? "Waking..." : "Wake"}
+							</button>
+							<button class="btn compact" onclick={() => openEdit(device)}>Edit</button>
 						</div>
 					</li>
 				{/each}
@@ -266,120 +173,89 @@
 	</Window>
 </main>
 
-<!-- Clearing the defaults on close stops a device picked from a scan seeding the next manual add. -->
-<dialog
-	class="window_frame"
-	bind:this={addDeviceDialog}
-	onclose={() => {
-		createDevice.element?.reset();
-		addDeviceDefaults = undefined;
-	}}
->
-	<div class="window_titlebar">
-		Add Device...
-		<div class="window_titlebar_controls">
-			<button aria-label="Close" onclick={() => addDeviceDialog?.close()}>X</button>
-		</div>
-	</div>
-
-	<form {...addDevice} style="padding-inline: 12px; padding-block: 16px;">
-		<!-- Re-keying rebuilds the inputs, so new defaults win over whatever was typed before. -->
-		{#key addDeviceDefaults}
-			{@render deviceFields(createDevice.fields, addDeviceDefaults)}
-		{/key}
-
-		{#each createDevice.fields.issues() ?? [] as issue (issue.message)}
-			<p class="fieldset-error" role="alert">{issue.message}</p>
-		{/each}
-
-		<button class="btn" style="width: 100%; margin-top: 12px;" type="submit" disabled={createDevice.pending > 0}>
-			{createDevice.pending > 0 ? "Adding..." : "Add"}
-		</button>
-	</form>
-</dialog>
-
-<!-- Dropping `editingDevice` on close releases the keyed form instance along with its state. -->
-<dialog class="window_frame" bind:this={editDeviceDialog} onclose={() => (editingDevice = undefined)}>
-	<div class="window_titlebar">
-		Edit Device...
-		<div class="window_titlebar_controls">
-			<button aria-label="Close" onclick={() => editDeviceDialog?.close()}>X</button>
-		</div>
-	</div>
-
-	{#if editing}
-		<form {...editing.props} style="padding-inline: 12px; padding-block: 16px;">
-			{@render deviceFields(editing.form.fields, editing.device)}
-
-			{#each editing.form.fields.issues() ?? [] as issue (issue.message)}
-				<p class="fieldset-error" role="alert">{issue.message}</p>
-			{/each}
-
-			<button class="btn" style="width: 100%; margin-top: 12px;" type="submit" disabled={editing.form.pending > 0}>
-				{editing.form.pending > 0 ? "Saving..." : "Save"}
-			</button>
-		</form>
-
-		<form {...removeDevice(editing.device)} style="padding-inline: 12px; padding-block-end: 16px;">
-			<input type="hidden" name="id" value={editing.device.id} />
-			<button
-				class="btn compact"
-				style="width: 100%;"
-				type="submit"
-				disabled={deleteDevice.for(editing.device.id).pending > 0}
-			>
-				{deleteDevice.for(editing.device.id).pending > 0 ? "Deleting..." : "Delete Device"}
+<Dialog title="Add Device" open={!!adding} onclose={() => (adding = undefined)}>
+	{#if adding}
+		{@const { form, values } = adding}
+		<form
+			class="dialog-body"
+			{...form.enhance(async (submission) => {
+				try {
+					if (!(await submission.submit())) return;
+					adding = undefined;
+					toast("Added device.");
+				} catch (error) {
+					toastError(error);
+				}
+			})}
+		>
+			{@render deviceFields(form, values)}
+			<button class="btn wide" type="submit" disabled={form.pending > 0}>
+				{form.pending > 0 ? "Adding..." : "Add"}
 			</button>
 		</form>
 	{/if}
-</dialog>
+</Dialog>
 
-<!--
-	Dropping `scanOpen` on close releases the query, so the scan isn't kept alive by a hidden dialog.
-	Re-opening serves the cached result; "Scan Again" is the only thing that touches the network.
--->
-<dialog class="window_frame scan-window" bind:this={scanDialog} onclose={() => (scanOpen = false)}>
-	<div class="window_titlebar">
-		Scan Network...
-		<div class="window_titlebar_controls">
-			<button aria-label="Close" onclick={() => scanDialog?.close()}>X</button>
-		</div>
-	</div>
+<Dialog title="Edit Device" open={!!editing} onclose={() => (editing = undefined)}>
+	{#if editing}
+		{@const { form, device } = editing}
+		<form
+			class="dialog-body"
+			{...form.enhance(async (submission) => {
+				try {
+					if (!(await submission.submit())) return;
+					editing = undefined;
+					toast("Saved device.");
+				} catch (error) {
+					toastError(error);
+				}
+			})}
+		>
+			<input {...form.fields.id.as("hidden", device.id)} />
+			{@render deviceFields(form, device)}
+			<button class="btn wide" type="submit" disabled={form.pending > 0}>
+				{form.pending > 0 ? "Saving..." : "Save"}
+			</button>
+			<button class="btn compact wide" type="button" disabled={removeDevice.pending > 0} onclick={() => remove(device)}>
+				Delete Device
+			</button>
+		</form>
+	{/if}
+</Dialog>
 
+<Dialog title="Scan Network" class="scan-window" bind:open={scanOpen}>
 	{#if scan}
-		<div class="scan-body">
+		<div class="scan-results">
 			{#if scan.error}
-				<p>Could not scan the network. {scan.error.message}</p>
+				<p class="dialog-body">Couldn't scan the network. {scan.error.message}</p>
 			{:else if !scan.ready}
-				<p>Scanning the network for devices...</p>
-				<p class="scan-note">This takes a few seconds while every address is checked.</p>
+				<p class="dialog-body">Looking for devices. This takes a few seconds...</p>
 			{:else if scan.current.devices.length === 0}
-				<p>No devices answered.</p>
-				<p class="scan-note">
-					{scan.current.subnets.length === 0
-						? "No local network was found to scan."
-						: `Nothing replied on ${scan.current.subnets.join(", ")}.`}
+				<p class="dialog-body">
+					{scan.current.subnets.length === 0 ? "No local network found to scan." : "No devices answered."}
 				</p>
 			{:else}
-				<ul class="device-list">
+				<div class="scan-columns scan-header" aria-hidden="true">
+					<span>Name</span>
+					<span>IP Address</span>
+					<span>MAC Address</span>
+				</div>
+				<ul class="list">
 					{#each scan.current.devices as found (found.ip)}
 						{@const added = isAdded(found)}
 						<li>
 							<button
-								class="discovered"
-								type="button"
+								class="scan-columns scan-row"
 								disabled={added}
-								title={added ? "Already in your device list." : ""}
-								onclick={() => addDiscovered(found)}
+								title="Found with {found.sources.join(', ').toUpperCase()}"
+								onclick={() => addFound(found)}
 							>
-								<span class="device-info">
-									{#if found.name}
-										<span class="device-name">{found.name}</span>
-									{/if}
-									<span class="device-address">{discoveredAddress(found)}</span>
-									<span class="discovered-source">Discovered from: {discoveredFrom(found)}</span>
+								<span class="scan-name" class:muted={!found.name && !found.hostname}>
+									{found.name ?? found.hostname ?? "No name"}
 								</span>
-								<span class="discovered-action">{added ? "Added" : "Add"}</span>
+								<span class="scan-ip">{found.ip}</span>
+								<span class="scan-mac" class:muted={!found.macAddress}>{found.macAddress ?? "No MAC"}</span>
+								<span class="scan-action">{added ? "Added" : "Add"}</span>
 							</button>
 						</li>
 					{/each}
@@ -387,15 +263,15 @@
 			{/if}
 		</div>
 
-		<div class="scan-footer">
-			<span class="scan-note">
-				{#if scan.ready && scan.current.subnets.length > 0}
-					Scanned {scan.current.subnets.join(", ")}
+		<footer class="scan-footer">
+			<span class="muted">
+				{#if scan.ready}
+					{scan.current.devices.length} found on {scan.current.subnets.join(", ")}
 				{/if}
 			</span>
-			<button class="btn compact" onclick={() => scan.refresh()} disabled={!scan.ready}>
-				{scan.ready ? "Scan Again" : "Scanning..."}
+			<button class="btn compact" onclick={() => scan.refresh()} disabled={scan.loading}>
+				{scan.loading ? "Scanning..." : "Scan Again"}
 			</button>
-		</div>
+		</footer>
 	{/if}
-</dialog>
+</Dialog>

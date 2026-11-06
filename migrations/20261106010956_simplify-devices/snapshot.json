@@ -1,0 +1,152 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "62094023-4f0f-474b-ab0f-d6332d503ef7",
+  "prevIds": [
+    "36a2ac23-7096-4987-be69-8bfd3e839c1b"
+  ],
+  "ddl": [
+    {
+      "name": "devices",
+      "entityType": "tables"
+    },
+    {
+      "table": "devices",
+      "name": "index",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "devices",
+      "name": "created_at",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "devices",
+      "name": "updated_at",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "devices",
+      "name": "id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "devices",
+      "name": "name",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "devices",
+      "name": "hostname",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "devices",
+      "name": "ip",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "devices",
+      "name": "mac_address",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "devices",
+      "name": "last_woken_at",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "devices",
+      "name": "devices_pk",
+      "columns": [
+        "index"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "devices",
+      "name": "devices_id_unique",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "devices",
+      "name": "devices_hostname_unique",
+      "columns": [
+        "hostname"
+      ],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "devices",
+      "name": "devices_ip_unique",
+      "columns": [
+        "ip"
+      ],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "devices",
+      "name": "devices_mac_address_unique",
+      "columns": [
+        "mac_address"
+      ],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    }
+  ],
+  "renames": [
+    "devices.comment->devices.name"
+  ]
+}

@@ -1,41 +1,20 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 
-	interface Props {
-		label: Snippet;
-		input: Snippet;
-		hint?: Snippet;
-		/** Validation problems to show beneath the input. Shaped to accept a remote form's `issues()` directly. */
+	type Props = {
+		label: string;
+		/** Problems to show under the input. Takes a remote form field's `issues()` as is. */
 		issues?: { message: string }[];
-		class?: string;
-		[key: string]: unknown;
-	}
+		children: Snippet;
+	};
 
-	let { label, input, hint, issues, class: className, ...rest }: Props = $props();
-
-	const uid = $props.id();
-	const anchor = `--field-${uid}`;
-
-	let hintEl: HTMLElement | undefined = $state();
+	let { label, issues, children }: Props = $props();
 </script>
 
-<fieldset
-	class="fieldset {className}"
-	style:anchor-name={hint ? anchor : null}
-	onfocusin={() => hintEl?.showPopover()}
-	onfocusout={() => hintEl?.hidePopover()}
-	{...rest}
->
-	<legend class="fieldset-legend">
-		{@render label()}
-	</legend>
-	{@render input()}
+<label class="field">
+	<span class="field-label">{label}</span>
+	{@render children()}
 	{#each issues ?? [] as issue (issue.message)}
-		<p class="fieldset-error" role="alert">{issue.message}</p>
+		<span class="field-error" role="alert">{issue.message}</span>
 	{/each}
-	{#if hint}
-		<p bind:this={hintEl} class="fieldset-hint" popover="manual" style:position-anchor={anchor}>
-			{@render hint()}
-		</p>
-	{/if}
-</fieldset>
+</label>

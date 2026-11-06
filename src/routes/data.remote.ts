@@ -1,76 +1,52 @@
-import { form, query } from "$app/server";
-import { invalid } from "@sveltejs/kit";
-import { eq } from "drizzle-orm";
-import { orm, schema } from "$lib/server/db";
-import {
-	DeviceConflict,
-	deleteDeviceById,
-	deviceChanged,
-	deviceInput,
-	insertDevice,
-	markDeviceWoken,
-	selectDevices,
-	updateDeviceById,
-} from "$lib/server/devices";
-import { scanNetwork } from "$lib/server/discovery";
-import { sendMagicPacket } from "$lib/server/wol";
+import { command, form, query } from "$app/server";
+import { error, invalid } from "@sveltejs/kit";
 import z from "zod";
+import * as devices from "#lib/server/devices.ts";
+import { scanNetwork } from "#lib/server/discovery.ts";
+import { nextChange } from "#lib/server/events.ts";
+import { wake } from "#lib/server/wake.ts";
 
+/** The device list. Sends a new copy whenever anything changes, including a device going on or off. */
 export const getDevices = query.live(async function* () {
 	while (true) {
-		// Subscribe before reading, so a device added while the read is in flight still wakes us.
-		const changed = deviceChanged();
-		yield await selectDevices();
+		// Start listening before reading, so a change during the read isn't missed.
+		const changed = nextChange();
+		yield await devices.list();
 		await changed;
 	}
 });
 
-/**
- * Sweeps the local network and reports what answered. A scan takes a few seconds of mostly waiting,
- * so it is a `query` rather than a live one: it runs when the scan dialog is opened and re-runs only
- * when the user asks for it again via `.refresh()`.
- */
-export const discoverDevices = query(async () => await scanNetwork());
+/** Scans the network. Takes a few seconds, so it only runs when the scan window asks for it. */
+export const discoverDevices = query(scanNetwork);
 
-/** A duplicate hostname, IP or MAC is something the form can fix, so it reads back as a form error. */
-const reportConflicts = async <Result>(write: () => Promise<Result>) => {
+/** Shows problems the user can fix, like a taken hostname, on the form. */
+const tryChange = async <Result>(change: () => Promise<Result>) => {
 	try {
-		return await write();
-	} catch (error) {
-		if (error instanceof DeviceConflict) invalid(error.message);
-		throw error;
+		return await change();
+	} catch (cause) {
+		if (cause instanceof devices.DeviceError) invalid(cause.message);
+		throw cause;
 	}
 };
 
-export const createDevice = form(deviceInput, async (data) => {
-	await reportConflicts(() => insertDevice(data));
+export const addDevice = form(devices.deviceInput, async (input) => {
+	await tryChange(() => devices.add(input));
 });
 
-export const updateDevice = form(deviceInput.extend({ id: z.string().nonempty() }), async ({ id, ...data }) => {
-	// The device may have been removed between the list being rendered and this submission.
-	if (!(await reportConflicts(() => updateDeviceById(id, data)))) invalid("That device no longer exists.");
+export const editDevice = form(devices.deviceInput.extend({ id: z.string() }), async ({ id, ...input }) => {
+	if (!(await tryChange(() => devices.edit(id, input)))) invalid("That device was removed.");
 });
 
-export const deleteDevice = form(z.object({ id: z.string().nonempty() }), async ({ id }) => {
-	// The device may have been removed between the list being rendered and this submission.
-	if (!(await deleteDeviceById(id))) invalid("That device no longer exists.");
+export const removeDevice = command(z.string(), async (id) => {
+	if (!(await devices.remove(id))) error(404, "That device was already removed.");
 });
 
-export const wakeDevice = form(z.object({ id: z.string().nonempty() }), async ({ id }) => {
-	const [device] = await orm
-		.select({ macAddress: schema.devices.macAddress })
-		.from(schema.devices)
-		.where(eq(schema.devices.id, id));
+/** Sends a wake signal. The device list then shows the device as waking until it's on. */
+export const wakeDevice = command(z.string(), async (id) => {
+	const row = await devices.get(id);
+	if (!row) error(404, "That device was removed.");
+	if (row.macAddress === null) error(400, "This device has no MAC address, so it can't be woken.");
 
-	if (!device) invalid("That device no longer exists.");
-	if (device.macAddress == null) invalid("This device has no MAC address set, so it can't be woken.");
-
-	try {
-		await sendMagicPacket(device.macAddress);
-	} catch (error) {
-		console.error(`Failed to send Wake-on-LAN packet for device ${id}:`, error);
-		invalid("Could not send the wake packet. Check the server logs for details.");
-	}
-
-	await markDeviceWoken(id);
+	const result = await wake({ id, ip: row.ip, macAddress: row.macAddress });
+	return result.alreadyOnline ? "alreadyOnline" : "waking";
 });

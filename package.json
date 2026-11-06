@@ -1,41 +1,40 @@
 {
 	"name": "wolnet",
 	"private": true,
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"type": "module",
-	"scripts": {
-		"dev": "bun run --bun vite dev",
-		"build": "bun run --bun vite build",
-		"preview": "bun run --bun vite preview",
-		"prepare": "bun run --bun svelte-kit sync || echo ''",
-		"format": "prettier --write .",
-		"cli": "bun run --bun src/cli/index.ts",
-		"db:push": "bun run --bun drizzle-kit push",
-		"db:generate": "bun run --bun drizzle-kit generate",
-		"db:migrate": "bun run --bun drizzle-kit migrate",
-		"db:studio": "bun run --bun drizzle-kit studio"
-	},
-	"devDependencies": {
-		"@sveltejs/kit": "^2.70.3",
-		"@sveltejs/vite-plugin-svelte": "^7.3.0",
-		"@types/bun": "^1.4.2",
-		"@types/ms": "^2.1.0",
-		"@types/node": "^26.6.0",
-		"dayjs": "^1.11.23",
-		"drizzle-kit": "^1.0.0-rc.5-ab785fc",
-		"drizzle-orm": "^1.0.0-rc.5-ab785fc",
-		"jose": "^6.2.12",
-		"ms": "^2.1.3",
-		"prettier": "^3.9.7",
-		"prettier-plugin-css-order": "^2.2.0",
-		"prettier-plugin-svelte": "^4.1.1",
-		"svelte": "^5.57.0",
-		"svelte-adapter-bun": "^1.0.1",
-		"typescript": "^7.0.2",
-		"vite": "^8.3.0",
-		"zod": "^4.6.5"
+	"imports": {
+		"#lib/*": "./src/lib/*"
 	},
 	"bin": {
 		"wolnet": "./src/cli/index.ts"
+	},
+	"scripts": {
+		"dev": "bun --bun vite dev",
+		"build": "bun --bun vite build",
+		"start": "bun ./server.js",
+		"check": "svelte-kit sync && svelte-check",
+		"format": "prettier --write .",
+		"cli": "bun ./src/cli/index.ts",
+		"db:generate": "bun --bun drizzle-kit generate",
+		"db:studio": "bun --bun drizzle-kit studio",
+		"prepare": "svelte-kit sync || echo ''"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-bun": "^1.0.0",
+		"@sveltejs/kit": "^3.1.1",
+		"@sveltejs/vite-plugin-svelte": "^7.3.1",
+		"@types/bun": "^1.4.4",
+		"@types/node": "^26.6.6",
+		"drizzle-kit": "1.0.0-rc.5",
+		"drizzle-orm": "1.0.0-rc.5",
+		"prettier": "^3.9.10",
+		"prettier-plugin-css-order": "^2.2.0",
+		"prettier-plugin-svelte": "^4.1.1",
+		"svelte": "^5.57.3",
+		"svelte-check": "^4.7.8",
+		"typescript": "^6.0.3",
+		"vite": "^8.3.6",
+		"zod": "^4.6.7"
 	}
 }

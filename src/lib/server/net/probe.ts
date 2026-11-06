@@ -1,47 +1,39 @@
 /**
- * Generic "is anything answering on this host" check, built on a raw TCP connect rather than ICMP
- * (unprivileged ping needs a raw socket the runtime doesn't expose). A device counts as reachable
- * the moment any candidate port accepts a connection, refuses one, or resets it - all of those mean
- * something is alive at that address, whereas a timeout means nothing answered.
+ * Checks if anything answers at an address by trying to open TCP connections. Used for devices on
+ * other networks, where ARP can't reach. (Ping would need raw sockets, which Bun doesn't have.)
+ *
+ * An accepted, refused, or reset connection all mean a device is there. Only silence means it isn't,
+ * so a device that silently drops every port looks off.
  */
 
-/** Common ports to try when the caller doesn't know what's listening on a device. */
-export const DEFAULT_PROBE_PORTS = [80, 443, 22, 445, 3389, 9] as const;
+/** Ports that something is usually listening on: web, SSH, Windows file sharing, remote desktop. */
+const PORTS = [80, 443, 22, 445, 3389];
 
-const REFUSAL_CODES = new Set(["ECONNREFUSED", "ECONNRESET"]);
+const TIMEOUT_MS = 1_500;
 
-const probePort = (host: string, port: number, timeoutMs: number) =>
-	new Promise<boolean>((resolve) => {
-		let settled = false;
-		const finish = (reachable: boolean) => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(timer);
-			resolve(reachable);
-		};
+const ANSWERED = new Set(["ECONNREFUSED", "ECONNRESET"]);
 
-		const timer = setTimeout(() => finish(false), timeoutMs);
+const tryPort = (host: string, port: number) =>
+	new Promise<boolean>((resolve, reject) => {
+		const answered = (error: unknown) => ANSWERED.has((error as NodeJS.ErrnoException).code ?? "");
+		const settle = (reachable: boolean) => (reachable ? resolve(true) : reject());
 
+		setTimeout(() => settle(false), TIMEOUT_MS);
 		Bun.connect({
 			hostname: host,
 			port,
 			socket: {
 				open: (socket) => {
 					socket.end();
-					finish(true);
+					settle(true);
 				},
-				error: (_socket, error) => finish(REFUSAL_CODES.has((error as NodeJS.ErrnoException).code ?? "")),
-				close: () => finish(false),
+				error: (_socket, error) => settle(answered(error)),
+				close: () => settle(false),
 				data: () => {},
 			},
-		}).catch((error: NodeJS.ErrnoException) => finish(REFUSAL_CODES.has(error.code ?? "")));
+		}).catch((error) => settle(answered(error)));
 	});
 
-/** Resolves `true` as soon as any candidate port responds, or `false` if every one times out. */
-export const isHostReachable = async (
-	host: string,
-	{ ports = DEFAULT_PROBE_PORTS, timeoutMs = 1500 }: { ports?: readonly number[]; timeoutMs?: number } = {},
-) => {
-	const results = await Promise.all(ports.map((port) => probePort(host, port, timeoutMs)));
-	return results.some(Boolean);
-};
+/** `true` as soon as any port answers, or `false` once they've all failed or timed out. */
+export const isHostReachable = (host: string) =>
+	Promise.any(PORTS.map((port) => tryPort(host, port))).catch(() => false);

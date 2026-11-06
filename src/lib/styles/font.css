@@ -1,0 +1,9 @@
+/* Finders Keepers, a pixel font. The build inlines it into the CSS (see `vite.config.ts`), so it's
+   ready before any text shows. `block` hides text instead of showing a fallback font, in case it
+   ever has to load separately (like during development). */
+@font-face {
+	src: url("../assets/fonts/finders-keepers.ttf") format("truetype");
+	font-family: "Finders Keepers";
+	font-display: block;
+	descent-override: 18%;
+}

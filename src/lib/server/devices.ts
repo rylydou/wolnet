@@ -1,255 +1,161 @@
-import { and, eq, ne, or } from "drizzle-orm";
-import { orm, schema } from "./db";
-import { newSecret } from "./config";
-import { startDeviceStatusMonitor } from "./device-status";
-import { isHostReachable } from "./net/probe";
-import { isMacOnline } from "./net/presence";
-import type { Device } from "$lib/types";
-import { MAC_ADDRESS_PATTERN, parseMacAddress } from "$lib/util";
-import z from "zod";
+/** The device list: reading, adding, editing, and removing devices. */
 
-export type DeviceRow = typeof schema.devices.$inferSelect;
+import { eq, or } from "drizzle-orm";
+import z from "zod";
+import { formatMacAddress, MAC_ADDRESS_PATTERN, parseMacAddress } from "#lib/mac.ts";
+import type { Device } from "#lib/types.ts";
+import { orm, schema } from "./db/index.ts";
+import type { DeviceRow } from "./db/schema.ts";
+import { notifyChange } from "./events.ts";
+import { checkSoon, statusOf } from "./status.ts";
+
+export type { DeviceRow };
+
+const { devices } = schema;
+
+/** A problem with the request that the user can fix, like a hostname that's already taken. */
+export class DeviceError extends Error {
+	constructor(
+		message: string,
+		readonly status: 400 | 404 | 409 = 400,
+	) {
+		super(message);
+	}
+}
 
 /**
- * Resolvers for the subscribers that are currently parked, waiting for the device table to change.
- * Every subscriber is woken and dropped at once, so the set stays empty between mutations and
- * disconnected clients cannot accumulate in it.
+ * A text field. Blank (`""`) means "clear it" and becomes `null`. Leaving it out means "don't
+ * change it" and stays `undefined`. Web forms always send every field, so saving a form replaces
+ * the whole device, while an API call only changes the fields it includes.
  */
-const deviceListeners = new Set<() => void>();
+const field = <Output>(schema: z.ZodType<Output, string>) =>
+	z
+		.string()
+		.trim()
+		.transform((value) => value || null)
+		.pipe(schema.nullable())
+		.optional();
 
-/** A promise that resolves the next time any device is added, changed or removed. */
-export const deviceChanged = () => {
-	const { promise, resolve } = Promise.withResolvers<void>();
-	deviceListeners.add(resolve);
-	return promise;
-};
+export const deviceInput = z.object({
+	name: field(z.string().max(100, "Must be 100 characters or less.")),
+	hostname: field(z.hostname("Must be a hostname, like my-desktop.local.")),
+	macAddress: field(
+		z
+			.string()
+			.regex(MAC_ADDRESS_PATTERN, "Must be 6 pairs of hex digits, like 00:1a:2b:3c:4d:5e.")
+			.transform((value) => parseMacAddress(value)!),
+	),
+	ip: field(z.union([z.ipv4(), z.ipv6()], "Must be an IPv4 or IPv6 address.")),
+});
 
-export const notifyDeviceChange = () => {
-	for (const listener of deviceListeners) listener();
-	deviceListeners.clear();
-};
+export type DeviceInput = z.infer<typeof deviceInput>;
 
-// Started once, on first module load, rather than per-request - it owns a single polling timer
-// for the process's whole lifetime, and pushes a device-list update whenever a status flips.
-startDeviceStatusMonitor(notifyDeviceChange);
-
-/** Maps a row onto the client-facing shape, dropping the internal primary key. */
 export const toDevice = (row: DeviceRow): Device => ({
 	id: row.id,
-	comment: row.comment ?? undefined,
+	name: row.name ?? undefined,
 	hostname: row.hostname ?? undefined,
 	ip: row.ip ?? undefined,
-	macAddress: row.macAddress ?? undefined,
-	status: row.status,
-	statusChangedAt: row.statusChangedAt ?? undefined,
+	macAddress: row.macAddress === null ? undefined : formatMacAddress(row.macAddress),
+	status: statusOf(row.id),
 	lastWokenAt: row.lastWokenAt ?? undefined,
 	createdAt: row.createdAt,
 	updatedAt: row.updatedAt,
 });
 
-export const selectDeviceRows = () => orm.select().from(schema.devices).orderBy(schema.devices.createdAt);
+/** Every device, oldest first. */
+export const list = async () => (await orm.select().from(devices).orderBy(devices.createdAt)).map(toDevice);
 
-export const selectDevices = async () => (await selectDeviceRows()).map(toDevice);
+export const get = async (id: string) => (await orm.select().from(devices).where(eq(devices.id, id)))[0];
 
-/**
- * Blank text inputs submit `""` rather than being omitted, so treat that as "not provided"
- * instead of running it through `schema` and reporting it as malformed.
- */
-const optionalText = <Schema extends z.ZodType<unknown, string>>(schema: Schema) =>
-	z
-		.string()
-		.optional()
-		.transform((value) => value?.trim() || undefined)
-		.pipe(schema.optional());
+/** Finds a device by its id, hostname, IP address, or MAC address. */
+export const find = async (handle: string) => {
+	const macAddress = parseMacAddress(handle);
 
-export const deviceInput = z.object({
-	comment: optionalText(z.string()),
-	hostname: optionalText(z.hostname("Must be a valid hostname, such as my-desktop.local.")),
-	macAddress: optionalText(z.string().regex(MAC_ADDRESS_PATTERN, "Must be six hex pairs, such as 00:1a:2b:3c:4d:5e.")),
-	ip: optionalText(z.union([z.ipv4(), z.ipv6()], "Must be a valid IPv4 or IPv6 address.")),
-});
-
-export type DeviceInput = z.infer<typeof deviceInput>;
-
-/**
- * Maps validated input onto device columns. A field left blank becomes an explicit empty value
- * rather than `undefined`, because Drizzle omits `undefined` columns from an `UPDATE` entirely,
- * which would quietly keep the old value instead of clearing it.
- */
-export const toDeviceColumns = (data: DeviceInput) => ({
-	// `comment` is `NOT NULL DEFAULT ''`, so a blank one clears to the empty string, not `null`.
-	comment: data.comment ?? "",
-	hostname: data.hostname ?? null,
-	ip: data.ip ?? null,
-	// The schema already rejected malformed addresses, so the parse cannot fail here.
-	macAddress: data.macAddress === undefined ? null : (parseMacAddress(data.macAddress) ?? null),
-});
-
-/**
- * Finds a device by any of the handles a caller might know it by - its id, its hostname, or its
- * MAC address in any of the accepted spellings.
- */
-export const findDevice = async (identifier: string) => {
-	const macAddress = parseMacAddress(identifier);
-
-	const [device] = await orm
+	const [row] = await orm
 		.select()
-		.from(schema.devices)
+		.from(devices)
 		.where(
 			or(
-				eq(schema.devices.id, identifier),
-				eq(schema.devices.hostname, identifier),
-				...(macAddress === undefined ? [] : [eq(schema.devices.macAddress, macAddress)]),
+				eq(devices.id, handle),
+				eq(devices.hostname, handle),
+				eq(devices.ip, handle),
+				macAddress === undefined ? undefined : eq(devices.macAddress, macAddress),
 			),
 		);
 
-	return device;
+	return row;
 };
 
-type DeviceColumns = ReturnType<typeof toDeviceColumns>;
-
-/**
- * The same columns with the fields the caller left out dropped entirely, so an update merges into
- * the stored device rather than replacing it. Drizzle omits `undefined` columns from an `UPDATE`,
- * which is exactly the "leave this one alone" behaviour a merge wants.
- */
-export const toPartialDeviceColumns = (data: DeviceInput) => {
-	const columns: Partial<DeviceColumns> = toDeviceColumns(data);
-	for (const key of Object.keys(columns) as (keyof DeviceColumns)[]) {
-		if (data[key] === undefined) delete columns[key];
-	}
-
-	return columns;
+/** Random ids, like `k3x9q0m2a7bz`. */
+const newId = () => {
+	const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
+	return Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) => alphabet[byte % alphabet.length]).join("");
 };
 
-/** Raised when a write would give two devices the same hostname, IP or MAC address. */
-export class DeviceConflict extends Error {}
+const COLUMN_LABELS: Record<string, string> = { hostname: "hostname", ip: "IP address", mac_address: "MAC address" };
 
-/** The columns a device is identified by, named the way someone reading the message would say it. */
-const UNIQUE_COLUMN_LABELS: Record<string, string> = {
-	hostname: "hostname",
-	ip: "IP address",
-	mac_address: "MAC address",
-};
-
-/**
- * SQLite reports a duplicate as `UNIQUE constraint failed: devices.<column>`, which is accurate but
- * not something to show anyone. Recognised collisions become a `DeviceConflict`; anything else is a
- * genuine fault and is left to propagate untouched.
- */
-const withConflicts = async <Result>(write: () => Promise<Result>) => {
+/** Runs a write, and turns "UNIQUE constraint failed" into a message a person can act on. */
+const write = async <Result>(run: () => Promise<Result>) => {
 	try {
-		return await write();
+		return await run();
 	} catch (error) {
-		const [, column] = /UNIQUE constraint failed: devices\.(\w+)/.exec(String((error as Error)?.cause ?? error)) ?? [];
-		const label = column === undefined ? undefined : UNIQUE_COLUMN_LABELS[column];
-		if (label === undefined) throw error;
+		const [, column] = /UNIQUE constraint failed: devices\.(\w+)/.exec(String((error as Error).cause ?? error)) ?? [];
+		if (!column || !COLUMN_LABELS[column]) throw error;
 
-		throw new DeviceConflict(`Another device already uses that ${label}.`);
+		throw new DeviceError(`Another device already has that ${COLUMN_LABELS[column]}.`, 409);
 	}
 };
 
-export const insertDevice = async (data: DeviceInput) => {
-	const [device] = await withConflicts(() =>
+const requireAddress = (device: Pick<DeviceRow, "hostname" | "ip" | "macAddress">) => {
+	if (!device.hostname && !device.ip && device.macAddress === null) {
+		throw new DeviceError("A device needs a hostname, MAC address, or IP address.");
+	}
+};
+
+export const add = async (input: DeviceInput) => {
+	const values = {
+		id: newId(),
+		name: input.name ?? null,
+		hostname: input.hostname ?? null,
+		ip: input.ip ?? null,
+		macAddress: input.macAddress ?? null,
+	};
+	requireAddress(values);
+
+	const [row] = await write(() => orm.insert(devices).values(values).returning());
+	notifyChange();
+	checkSoon();
+	return row!;
+};
+
+/** Changes the fields given in `input`. Returns `undefined` if the device doesn't exist. */
+export const edit = async (id: string, input: DeviceInput) => {
+	const existing = await get(id);
+	if (!existing) return undefined;
+
+	// Fields that weren't given (`undefined`) keep their value. Drizzle leaves them out of the update.
+	const given = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+	requireAddress({ ...existing, ...given });
+
+	const [row] = await write(() =>
 		orm
-			.insert(schema.devices)
-			.values({ id: newSecret(), ...toDeviceColumns(data) })
+			.update(devices)
+			.set({ ...input, updatedAt: new Date() })
+			.where(eq(devices.id, id))
 			.returning(),
 	);
-
-	notifyDeviceChange();
-	return device;
+	notifyChange();
+	checkSoon();
+	return row;
 };
 
-/**
- * Returns the updated row, or `undefined` if the device was removed in the meantime. `merge` keeps
- * the fields the caller left out; without it the data given describes the device in full.
- */
-export const updateDeviceById = async (id: string, data: DeviceInput, { merge = false } = {}) => {
-	const columns = merge ? toPartialDeviceColumns(data) : toDeviceColumns(data);
-
-	const [device] = await withConflicts(() =>
-		orm
-			.update(schema.devices)
-			.set({ ...columns, updatedAt: new Date() })
-			.where(eq(schema.devices.id, id))
-			.returning(),
-	);
-
-	if (device) notifyDeviceChange();
-	return device;
+/** Returns the removed device, or `undefined` if it didn't exist. */
+export const remove = async (id: string) => {
+	const [row] = await orm.delete(devices).where(eq(devices.id, id)).returning();
+	if (row) notifyChange();
+	return row;
 };
 
-/** Drops the device's row. Returns `undefined` if it was already gone. */
-export const deleteDeviceById = async (id: string) => {
-	const [device] = await orm.delete(schema.devices).where(eq(schema.devices.id, id)).returning();
-
-	if (device) notifyDeviceChange();
-	return device;
-};
-
-export const markDeviceWoken = async (id: string) => {
-	await orm.update(schema.devices).set({ lastWokenAt: new Date() }).where(eq(schema.devices.id, id));
-	notifyDeviceChange();
-};
-
-/**
- * Records that a device was seen answering, so the list reflects a confirmed wake immediately
- * rather than at the next sweep of the background monitor. Only writes when the status actually
- * flips, keeping `statusChangedAt` meaning "when it came up" rather than "when it was last looked
- * at".
- */
-export const markDeviceOnline = async (id: string) => {
-	const [device] = await orm
-		.update(schema.devices)
-		.set({ status: "online", statusChangedAt: new Date() })
-		.where(and(eq(schema.devices.id, id), ne(schema.devices.status, "online")))
-		.returning();
-
-	if (device) notifyDeviceChange();
-	return device;
-};
-
-/** All a presence check needs to know about a device: a MAC address to look for, an IP to probe. */
-export type DeviceAddress = Pick<DeviceRow, "ip" | "macAddress">;
-
-/**
- * Whether the device is answering on the network right now. A MAC address on its own is enough, and
- * is the better signal where there is a choice - see `net/presence` for why - so the IP address is
- * only probed when ARP has nothing to say about the device.
- */
-export const isDeviceOnline = async ({ ip, macAddress }: DeviceAddress, { sweep = false } = {}) => {
-	if (macAddress !== null) {
-		const hints = ip === null ? undefined : new Map([[macAddress, ip]]);
-		if (await isMacOnline(macAddress, { hints, sweep })) return true;
-	}
-
-	return ip !== null && (await isHostReachable(ip));
-};
-
-/**
- * How often a wait may sweep the subnet looking for a device it has no address for. A sweep takes a
- * few seconds, so it can't run on every round of a poll that ticks every two.
- */
-const WAIT_SWEEP_INTERVAL_MS = 15_000;
-
-/**
- * Polls a device until it answers, so a caller can treat the response as "it's actually up" rather
- * than "a packet went out". Resolves `false` if it never answers within `timeoutMs`.
- */
-export const waitUntilOnline = async (device: DeviceAddress, { timeoutMs = 60_000, intervalMs = 2_000 } = {}) => {
-	const deadline = Date.now() + timeoutMs;
-	let lastSweepAt = 0;
-
-	while (true) {
-		// A device with no IP address on record can only be placed by a sweep, at least until it turns
-		// up in the neighbour table by itself - which a device that has just booted usually does, since
-		// joining a network means a DHCP exchange and a gratuitous ARP announcement.
-		const sweep = device.ip === null && Date.now() - lastSweepAt >= WAIT_SWEEP_INTERVAL_MS;
-		if (sweep) lastSweepAt = Date.now();
-
-		if (await isDeviceOnline(device, { sweep })) return true;
-		if (Date.now() >= deadline) return false;
-		await Bun.sleep(intervalMs);
-	}
+export const markWoken = async (id: string) => {
+	await orm.update(devices).set({ lastWokenAt: new Date() }).where(eq(devices.id, id));
 };

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import favicon from "$lib/assets/favicon.svg";
-	import { Toaster } from "$lib/common/toasts";
-	import "$lib/styles/index.css";
+	import favicon from "#lib/assets/images/favicon.png";
+	import Toaster from "#lib/components/toaster.svelte";
+	import "#lib/styles/index.css";
 
 	let { children } = $props();
 </script>

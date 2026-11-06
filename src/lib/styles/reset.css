@@ -1,22 +1,13 @@
 *:not(dialog, svg, svg *) {
 	appearance: none;
-
-	opacity: unset;
-
 	box-sizing: border-box;
 	margin: unset;
 	border: unset;
 	background: unset;
 	padding: unset;
-
-	width: unset;
 	min-width: 0;
-	max-width: unset;
-	height: unset;
 	min-height: 0;
-	max-height: unset;
 	color: unset;
-
 	font: unset;
 	text-decoration: unset;
 }
@@ -26,32 +17,12 @@ ol {
 	list-style: none;
 }
 
-img {
-	vertical-align: middle;
-	shape-margin: 1rem;
-	background-size: cover;
-	background-repeat: no-repeat;
-	max-width: 100%;
-	height: auto;
-	font-style: italic;
-}
-
 dialog {
-	appearance: none;
 	box-sizing: border-box;
 	border: unset;
 	background: unset;
 	padding: unset;
-	padding: unset;
 	max-width: unset;
 	max-height: unset;
-}
-
-input[type="number"] {
-	appearance: textfield;
-
-	&::-webkit-outer-spin-button,
-	&::-webkit-inner-spin-button {
-		appearance: none;
-	}
+	color: inherit;
 }

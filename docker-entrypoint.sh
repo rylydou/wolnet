@@ -1,16 +1,14 @@
 #!/bin/sh
-# Make the data directory writable by the user the server runs as, then drop to that user.
+# Makes the data folder writable by the `bun` user, then runs the server as `bun` instead of root.
 #
-# `chown` in the Dockerfile only reaches the image's own `/data`. When compose bind-mounts a host
-# directory over it, that directory arrives with the host's ownership instead - and Docker creates
-# a missing bind-mount source as root, which the unprivileged server then cannot write to. Named
-# volumes don't have the problem: Docker copies the image's ownership onto a fresh one.
+# A folder mounted from the host keeps the host's owner, which may not be `bun`. (Docker named
+# volumes don't have this problem.)
 set -e
 
 DATA_DIR="${WOL_DATA_DIR:-/data}"
 
-# Already unprivileged (compose set `user:`, or the image was run with --user): nothing to fix up,
-# and no permission to fix it up with.
+# Already running as a normal user (`user:` in compose, or `docker run --user`), so there's
+# nothing to fix and no permission to fix it with.
 if [ "$(id -u)" != 0 ]; then
 	exec "$@"
 fi
@@ -18,9 +16,9 @@ fi
 mkdir -p "$DATA_DIR"
 
 if [ "$(stat -c %u "$DATA_DIR")" != "$(id -u bun)" ]; then
-	echo "entrypoint: taking ownership of $DATA_DIR for bun" >&2
+	echo "entrypoint: giving the bun user ownership of $DATA_DIR" >&2
 	chown -R bun:bun "$DATA_DIR" ||
-		echo "entrypoint: warning - could not chown $DATA_DIR; the server may fail to open its database" >&2
+		echo "entrypoint: warning: couldn't change the owner of $DATA_DIR, so the database may not open" >&2
 fi
 
 exec su-exec bun "$@"

@@ -1,486 +1,367 @@
-@layer base, theme, components, utilities;
+@layer reset, base;
 
-@import "reset.css" layer(base);
-/* @import "vars.css" layer(theme); */
+@import "reset.css" layer(reset);
+@import "font.css";
 
-@import "components/form.css" layer(components);
-@import "components/toaster.css" layer(components);
-
-/* @import "fonts/hyperlegible.css"; */
-@import "fonts/chunky.css";
-
-@layer theme {
+@layer base {
+	/* Everything is sized in whole art pixels (`--px`), so the pixel font and images stay sharp. */
 	html {
-		--font-sans: "hyperlegible", ui-sans-serif, sans-serif;
-		--font-mono: "JetBrains Mono", "Iosevka", "Fira Code", "Fira Mono", ui-monospace, monospace;
-		background-size: calc(8px * var(--pixel-scale));
+		--px: 2px;
 
-		/* background-color: teal; */
-		/* background-image: url("$lib/assets/images/bg-checker.png"); */
 		background-color: white;
 		image-rendering: pixelated;
-		scrollbar-width: thin;
-		color: var(--color-base-content);
-		accent-color: var(--color-accent);
-		font-size: calc(16px * var(--pixel-scale));
+		color: black;
+		font-size: calc(16 * var(--px));
 		line-height: 1;
-		font-family: "chunky", monospace;
+		font-family: "Finders Keepers", monospace;
 		user-select: none;
 		-webkit-font-smoothing: none;
 		-moz-osx-font-smoothing: unset;
-		font-smooth: never;
-		text-rendering: optimizeSpeed;
-
-		--pixel-scale: 2;
-	}
-}
-
-@layer base {
-	.layout,
-	.dash-layout {
-		margin-inline: auto;
-		padding-top: calc(8px * var(--pixel-scale));
-		width: min(calc(400px * var(--pixel-scale)), calc(100vw - 16px * var(--pixel-scale)));
+		scrollbar-width: thin;
 	}
 
-	.dash-header {
-		& h1 {
-			/* font-weight: bold; */
-			font-size: calc(32px * var(--pixel-scale));
-		}
-	}
-
-	.dash-header-controls {
-	}
-
-	.device-list {
-		display: flex;
-		flex-direction: column;
-		list-style: none;
-	}
-
-	.device {
-		display: flex;
-		flex-direction: row;
-		justify-content: space-between;
-		align-items: start;
-		gap: calc(2px * var(--pixel-scale));
-		border-bottom: solid calc(1px * var(--pixel-scale)) black;
-		padding-block: calc(8px * var(--pixel-scale)) calc(12px * var(--pixel-scale));
-
-		&:first-child {
-			padding-top: 0;
-		}
-
-		&:last-child {
-			border-bottom: none;
-			padding-bottom: 0;
-		}
-	}
-
-	.device-info {
-		display: flex;
-		flex-direction: column;
-	}
-
-	.device-status {
-		display: inline-block;
-		vertical-align: center;
-		background-image: url("$lib/assets/images/device-status-offline.png");
-		background-position: center;
-		background-size: cover;
-		background-clip: padding-box;
-		background-color: transparent;
-		image-rendering: pixelated;
-		min-width: calc(16px * var(--pixel-scale));
-		min-height: calc(16px * var(--pixel-scale));
-
-		&.device-status--online {
-			background-image: url("$lib/assets/images/device-status-online.png");
-		}
-	}
-
-	.device-address {
+	.selectable {
 		user-select: text;
 	}
 
-	.device-controls {
-		display: flex;
-		flex-direction: row;
-		justify-content: flex-end;
-		gap: calc(2px * var(--pixel-scale));
+	.muted {
+		opacity: 0.55;
+	}
 
-		& .btn {
-			width: calc(60px * var(--pixel-scale));
+	.row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: calc(2 * var(--px));
+	}
+
+	/* Page */
+
+	.page {
+		margin-inline: auto;
+		padding-block: calc(8 * var(--px));
+		width: min(calc(400 * var(--px)), 100% - calc(16 * var(--px)));
+	}
+
+	.page-header {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: end;
+		gap: calc(4 * var(--px));
+		margin-bottom: calc(8 * var(--px));
+
+		& h1 {
+			font-size: calc(32 * var(--px));
 		}
 	}
 
-	.scan-window {
-		width: min(calc(320px * var(--pixel-scale)), calc(100vw - 16px * var(--pixel-scale)));
+	/* Windows and dialogs */
+
+	.window {
+		border: solid var(--px) black;
+		border-bottom-width: calc(2 * var(--px));
+		background-color: white;
 	}
 
-	/* A scan can turn up far more devices than the list does, so the results scroll on their own
-	   and leave the title bar and the footer button in place. */
-	.scan-body {
-		max-height: min(calc(240px * var(--pixel-scale)), 60vh);
+	.window-titlebar {
+		position: relative;
+		border-bottom: solid var(--px) black;
+		padding-inline: calc(24 * var(--px));
+		text-align: center;
+	}
+
+	.window-close {
+		position: absolute;
+		inset-block: 0;
+		right: 0;
+		padding-inline: calc(8 * var(--px)) calc(6 * var(--px));
+
+		&:is(:hover, :focus-visible) {
+			outline: none;
+			background-color: black;
+			color: white;
+		}
+	}
+
+	.window-content {
+		padding: calc(8 * var(--px));
+	}
+
+	dialog.window {
+		margin: auto;
+		outline: none;
+		width: min(calc(320 * var(--px)), 100% - calc(16 * var(--px)));
+
+		&::backdrop {
+			background-color: rgb(0 0 0 / 0.75);
+		}
+	}
+
+	.dialog-body {
+		display: flex;
+		flex-direction: column;
+		gap: calc(6 * var(--px));
+		padding: calc(8 * var(--px)) calc(8 * var(--px)) calc(10 * var(--px));
+	}
+
+	/* Lists */
+
+	.list > li + li {
+		border-top: solid var(--px) black;
+	}
+
+	/* On narrow screens the buttons wrap under the text instead of squeezing it. */
+	.list-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: calc(4 * var(--px)) calc(6 * var(--px));
+		padding-block: calc(6 * var(--px));
+
+		& > .row {
+			margin-left: auto;
+		}
+	}
+
+	.list > li:first-child > .list-row {
+		padding-top: 0;
+	}
+
+	.list > li:last-child > .list-row {
+		padding-bottom: 0;
+	}
+
+	.list-text {
+		display: flex;
+		flex: 1 1 calc(100 * var(--px));
+		flex-direction: column;
+		gap: calc(2 * var(--px));
+		overflow-wrap: anywhere;
+	}
+
+	/* Each detail stays on one line, and they wrap as a whole. */
+	.details {
+		display: flex;
+		column-gap: calc(8 * var(--px));
+		flex-wrap: wrap;
+
+		& > span {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+	}
+
+	.status {
+		flex-shrink: 0;
+		align-self: start;
+		background: url("../assets/images/device-status-offline.png") center / cover;
+		width: calc(16 * var(--px));
+		height: calc(16 * var(--px));
+	}
+
+	.status-online {
+		background-image: url("../assets/images/device-status-online.png");
+	}
+
+	/* Blinks between off and on while waiting for a device to wake up. */
+	.status-waking {
+		animation: blink 1s steps(1) infinite;
+	}
+
+	@keyframes blink {
+		50% {
+			background-image: url("../assets/images/device-status-online.png");
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.status-waking {
+			opacity: 0.5;
+			animation: none;
+		}
+	}
+
+	/* Scan window */
+
+	dialog.scan-window {
+		container-type: inline-size;
+		width: min(calc(480 * var(--px)), 100% - calc(16 * var(--px)));
+	}
+
+	/* Results scroll on their own, so the title bar and footer stay put. */
+	.scan-results {
+		max-height: min(calc(300 * var(--px)), 65dvh);
+		overflow-x: hidden;
 		overflow-y: auto;
 	}
 
-	.scan-footer {
-		display: flex;
-		flex-direction: row;
-		justify-content: space-between;
-		align-items: center;
-		gap: calc(4px * var(--pixel-scale));
-		border-top: solid calc(1px * var(--pixel-scale)) black;
-		padding: calc(4px * var(--pixel-scale)) calc(8px * var(--pixel-scale));
-	}
-
-	.scan-note {
-		opacity: 0.5;
-	}
-
-	/* The whole row is the control - clicking anywhere on a discovered device opens the add form
-	   pre-filled with it, rather than making the user aim at a small button. */
-	.discovered {
-		display: flex;
-		flex-direction: row;
-		justify-content: space-between;
-		align-items: center;
-		gap: calc(4px * var(--pixel-scale));
-		outline: none;
-		border-bottom: solid calc(1px * var(--pixel-scale)) gray;
-		background: none;
-		padding: calc(6px * var(--pixel-scale)) calc(8px * var(--pixel-scale));
+	/* One row per device, in columns, like a table. */
+	.scan-columns {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) calc(64 * var(--px)) calc(84 * var(--px)) calc(28 * var(--px));
+		column-gap: calc(8 * var(--px));
+		align-items: baseline;
+		padding: calc(4 * var(--px)) calc(8 * var(--px));
 		width: 100%;
 		text-align: left;
+	}
 
+	.scan-header {
+		position: sticky;
+		top: 0;
+		border-bottom: solid var(--px) black;
+		background-color: white;
+		color: rgb(0 0 0 / 0.55);
+	}
+
+	.scan-name {
+		overflow-wrap: anywhere;
+	}
+
+	.scan-action {
+		text-align: right;
+	}
+
+	/* Too narrow for columns: put the name on the first line, the addresses on the second. */
+	@container (width < 360px) {
+		.scan-header {
+			display: none;
+		}
+
+		.scan-columns {
+			grid-template-columns: auto minmax(0, 1fr) auto;
+			grid-template-areas: "name name action" "ip mac mac";
+			row-gap: calc(2 * var(--px));
+		}
+
+		.scan-name {
+			grid-area: name;
+		}
+
+		.scan-ip {
+			grid-area: ip;
+		}
+
+		.scan-mac {
+			grid-area: mac;
+		}
+
+		.scan-action {
+			grid-area: action;
+		}
+	}
+
+	/* The whole row is the button, so it's easy to hit. */
+	.scan-row {
 		&:is(:hover, :focus-visible):not(:disabled) {
+			outline: none;
 			background-color: black;
 			color: white;
 		}
 
 		&:disabled {
-			color: lightgray;
+			opacity: 0.4;
 		}
 	}
 
-	.device-list > li:last-child > .discovered {
-		border-bottom: none;
+	.scan-footer {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: calc(4 * var(--px));
+		border-top: solid var(--px) black;
+		padding: calc(4 * var(--px)) calc(8 * var(--px));
 	}
 
-	/* Which protocols turned the device up - useful context, but secondary to its name. */
-	.discovered-source {
-		opacity: 0.5;
-	}
-
-	.discovered-action {
-		flex-shrink: 0;
-	}
-
-	.window_frame {
-		border: solid calc(1px * var(--pixel-scale)) black;
-		border-bottom: solid calc(2px * var(--pixel-scale)) black;
-		background-clip: padding-box;
-		background-color: #c3c3c3;
-
-		background-color: white;
-		image-rendering: pixelated;
-
-		& > .window_titlebar {
-			position: relative;
-			border-bottom: solid calc(1px * var(--pixel-scale)) black;
-			padding: 0 calc(6px * var(--pixel-scale));
-			text-align: center;
-
-			& > .window_titlebar_controls {
-				position: absolute;
-				top: 0;
-				right: 0;
-				bottom: 0;
-
-				& > button {
-					outline: none;
-					padding-inline: 16px 12px;
-					/* aspect-ratio: 1/1; */
-					height: 100%;
-					text-align: center;
-
-					&:is(:hover, :focus-visible) {
-						background-color: black;
-						color: white;
-					}
-				}
-			}
-		}
-
-		& > .window_content {
-			padding: calc(8px * var(--pixel-scale));
-		}
-	}
-
-	dialog.window_frame {
-		/* width: min(calc(400px * var(--pixel-scale)), 100vw);
-		height: min(calc(300px * var(--pixel-scale)), 100vh); */
-		margin: auto;
-		outline: none;
-		user-select: none;
-
-		&::backdrop {
-			background-color: rgba(0 0 0 / 0.75);
-		}
-	}
+	/* Buttons */
 
 	.btn {
-		border-width: calc(3px * var(--pixel-scale));
-		border-style: solid;
-		border-image: url("$lib/assets/images/button.png") 3 stretch;
-		background: white;
-		background-clip: padding-box;
-		padding-inline: calc(8px * var(--pixel-scale));
-		image-rendering: pixelated;
-		min-height: calc(22px * var(--pixel-scale));
-		color: black;
+		flex-shrink: 0;
+		border: solid calc(3 * var(--px));
+		border-image: url("../assets/images/button.png") 3 stretch;
+		background: white padding-box;
+		padding-inline: calc(8 * var(--px));
+		min-height: calc(22 * var(--px));
 		text-align: center;
-		text-align: center;
-		text-decoration: none;
+		white-space: nowrap;
 
 		&.compact {
-			padding-inline: calc(4px * var(--pixel-scale));
-			min-height: calc(18px * var(--pixel-scale));
+			padding-inline: calc(4 * var(--px));
+			min-height: calc(18 * var(--px));
 		}
 
-		&:active {
+		&.wide {
+			width: 100%;
+		}
+
+		&:active:not(:disabled) {
 			filter: invert(1);
 		}
+
+		&:disabled {
+			opacity: 0.5;
+		}
+	}
+
+	/* Form fields */
+
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: calc(1 * var(--px));
 	}
 
 	.input {
-		display: flex;
-		align-items: baseline;
-		gap: 0;
-		cursor: text;
-		border: solid calc(1px * var(--pixel-scale)) black;
-		background-color: white;
-		padding: 0 calc(5px * var(--pixel-scale));
-		width: calc(180px * var(--pixel-scale));
-		height: calc(22px * var(--pixel-scale));
-		color: black;
+		border: solid var(--px) black;
+		padding-inline: calc(5 * var(--px));
+		width: 100%;
+		height: calc(22 * var(--px));
+		user-select: text;
 
-		&[type="number"] {
-			text-align: right;
-		}
-
-		&.flat {
-			border-color: transparent;
-		}
-
-		&.compact {
-			padding: 0 calc(2px * var(--pixel-scale));
-			height: calc(18px * var(--pixel-scale));
-		}
-
-		&:is(:focus, :focus-within) {
-			outline: none;
-			box-shadow: inset 0 0 0 calc(1px * var(--pixel-scale)) white;
-			border-color: black;
-			background-color: black;
-			color: white;
-		}
-
-		& > input {
-			flex: 1;
-			align-self: stretch;
-			outline: none;
-			border: none;
-			padding: 0;
-			width: 100%;
-			min-width: 0;
-		}
-
-		&:has(.prefix) > input {
-			text-align: left;
-		}
-
-		&:has(.suffix) > input {
-			text-align: right;
-		}
-
-		& > :is(.prefix, .suffix) {
-			align-self: center;
-		}
-	}
-
-	.unit-input {
-		display: flex;
-		align-items: baseline;
-		gap: 0;
-		cursor: text;
-		margin-right: calc(-4px * var(--pixel-scale));
-		border: solid calc(1px * var(--pixel-scale)) transparent;
-		padding: calc(1px * var(--pixel-scale)) calc(4px * var(--pixel-scale));
-		height: calc(22px * var(--pixel-scale));
-
-		& > input {
-			outline: none;
-			border: none;
-			padding: 0;
-			padding-right: calc(1px * var(--pixel-scale));
-			text-align: right;
-		}
-
-		&:focus-within {
-			box-shadow: inset 0 0 0 calc(1px * var(--pixel-scale)) white;
-			border-color: black;
-			background-color: black;
-			color: white;
-		}
-	}
-
-	.menubar {
-		display: flex;
-		flex-direction: row;
-		border-bottom: solid calc(1px * var(--pixel-scale)) black;
-		background-color: white;
-
-		& > .menubar_item {
-			position: relative;
-			cursor: default;
-			background-color: white;
-			/* display: flex; */
-			/* align-items: baseline; */
-			padding: 0 calc(6px * var(--pixel-scale));
-
-			& > .menu {
-				visibility: hidden;
-			}
-
-			&:is(:hover, :focus-visible, :active) {
-				background-color: black;
-				color: white;
-
-				& > .menu {
-					visibility: visible;
-				}
-			}
-		}
-	}
-
-	.menu {
-		display: flex;
-		position: absolute;
-		top: 100%;
-		left: 0;
-		flex-direction: column;
-		align-items: stretch;
-		border: solid calc(1px * var(--pixel-scale)) black;
-		background-color: white;
-		width: max-content;
-		color: black;
-
-		& > .menu_item {
-			padding: 0 calc(6px * var(--pixel-scale));
-			text-align: left;
-
-			&:is(:hover, :focus-visible) {
-				background-color: black;
-				color: white;
-			}
-		}
-	}
-
-	.range {
-		appearance: none;
-		cursor: crosshair;
-		width: calc(180px * var(--pixel-scale));
-		height: calc(24px * var(--pixel-scale));
-
-		/* &::-moz-range-track {
-			border-width: calc(3px * var(--pixel-scale));
-			border: solid;
-			border-radius: 0;
-			border-image: url('$lib/assets/images/range-track.png') 3 stretch;
-			background-clip: padding-box;
-			background-color: white;
-			image-rendering: pixelated;
-			height: calc(2px * var(--pixel-scale));
-		} */
-
-		&::-moz-range-track {
-			border: solid calc(1px * var(--pixel-scale)) black;
-			background-clip: padding-box;
-			background-color: white;
-			image-rendering: pixelated;
-			height: calc(4px * var(--pixel-scale));
-		}
-
-		&::-webkit-slider-runnable-track {
-			box-shadow: inset 0 0 0 calc(1px * var(--pixel-scale)) black;
-			background-clip: padding-box;
-			background-color: white;
-			image-rendering: pixelated;
-			height: calc(6px * var(--pixel-scale));
-		}
-
-		&::-moz-range-thumb {
-			appearance: none;
-			border: none;
-			border-radius: 0;
-			background-image: url("$lib/assets/images/range-thumb.png");
-			background-position: center;
-			background-size: cover;
-			background-clip: padding-box;
-			background-color: transparent;
-			image-rendering: pixelated;
-			width: calc(10px * var(--pixel-scale));
-			height: calc(24px * var(--pixel-scale));
-		}
-
-		&::-webkit-slider-thumb {
-			translate: 0 calc(-50% + 3px * var(--pixel-scale));
-			appearance: none;
-			border: none;
-			border-radius: 0;
-			background-image: url("$lib/assets/images/range-thumb.png");
-			background-position: center;
-			background-size: cover;
-			background-clip: padding-box;
-			background-color: transparent;
-			image-rendering: pixelated;
-			width: calc(10px * var(--pixel-scale));
-			height: calc(24px * var(--pixel-scale));
+		&::placeholder {
+			opacity: 0.35;
+			color: black;
 		}
 
 		&:focus {
 			outline: none;
-		}
+			box-shadow: inset 0 0 0 var(--px) white;
+			background-color: black;
+			color: white;
 
-		&:focus-visible,
-		&:active {
-			&::-moz-range-thumb {
-				filter: invert(1);
-			}
-
-			&::-webkit-slider-thumb {
-				filter: invert(1);
+			&::placeholder {
+				color: white;
 			}
 		}
 	}
 
-	.fieldset-rangefield {
-		& > .fieldset-legend {
-			display: flex;
-			flex-direction: row;
-			justify-content: space-between;
-			align-items: baseline;
-			/* height: calc(18px * var(--pixel-scale)); */
+	.field-error {
+		background-color: black;
+		padding-inline: calc(4 * var(--px));
+		width: fit-content;
+		color: white;
+	}
 
-			& > .input {
-				margin-right: calc(-4px * var(--pixel-scale));
-				padding: 0 calc(2px * var(--pixel-scale));
-				width: 3rem;
-				/* height: 100%; */
-			}
-		}
+	/* Toasts */
+
+	.toaster {
+		display: flex;
+		position: fixed;
+		flex-direction: column;
+		align-items: end;
+		gap: calc(2 * var(--px));
+		inset: calc(8 * var(--px)) calc(8 * var(--px)) auto auto;
+		max-width: calc(100% - calc(16 * var(--px)));
+		overflow: visible;
+	}
+
+	.toast {
+		border: solid var(--px) white;
+		background-color: black;
+		padding: calc(4 * var(--px)) calc(8 * var(--px));
+		max-width: calc(300 * var(--px));
+		color: white;
+		text-align: left;
 	}
 }

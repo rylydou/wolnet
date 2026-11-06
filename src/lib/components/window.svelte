@@ -1,21 +1,12 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 
-	interface Props {
-		windowTitle: Snippet;
-		children: Snippet;
-		class?: string;
-		[key: string]: unknown;
-	}
-
-	let { children, windowTitle, class: className, ...rest }: Props = $props();
+	let { title, children }: { title: string; children: Snippet } = $props();
 </script>
 
-<div class="window_frame {className}" {...rest}>
-	<div class="window_titlebar">
-		{@render windowTitle()}
-	</div>
-	<div class="window_content">
+<section class="window">
+	<header class="window-titlebar">{title}</header>
+	<div class="window-content">
 		{@render children()}
 	</div>
-</div>
+</section>

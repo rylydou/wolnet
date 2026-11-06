@@ -1,49 +1,114 @@
 # API
 
-All endpoints accept a JSON or form-encoded body, and respond with JSON. Errors respond with an
-appropriate status and `{ "message": "..." }`.
+Every response is JSON. Errors look like `{ "status": 404, "message": "No device called \"my-pc\"." }`.
 
-A device can be referred to by its hostname, its MAC address (`00:1a:2b:3c:4d:5e`, `00-1A-...` or
-`001a2b3c4d5e`), or its id.
+`{device}` can be a device's hostname, IP address, MAC address, or id. MAC addresses can be written as
+`00:1a:2b:3c:4d:5e`, `00-1A-2B-3C-4D-5E`, or `001a2b3c4d5e`.
 
-## Wake
+| Request                        | What it does                         |
+| ------------------------------ | ------------------------------------ |
+| `GET /api/wake/{device}`       | Wake a device and wait until it's on |
+| `GET /api/devices`             | List devices                         |
+| `POST /api/devices`            | Add a device                         |
+| `GET /api/devices/{device}`    | Get one device                       |
+| `PATCH /api/devices/{device}`  | Change a device                      |
+| `DELETE /api/devices/{device}` | Remove a device                      |
+| `GET /api/scan`                | Find devices on the network          |
 
-- `GET|POST /api/wake/{device-hostname}` — wakes a known device from the list.
-- `GET|POST /api/wake/{device-mac}` — wakes any device by MAC address. It does not have to be on
-  the list.
+**Requests that change something (`POST`, `PATCH`, `DELETE`) must have the header
+`content-type: application/json`**, even when there's no body. This is how WolNet tells them apart from
+another website trying to make changes in your browser.
 
-The request is held open until the device is actually online. It is checked first — if it already
-answers, the response comes back immediately and no packet is sent — and otherwise polled every two
-seconds after the packet goes out, so a `200` means it is genuinely up. `?wait=<seconds>` sets how
-long to poll (default `120`); a device that never answers within it is a `504`.
+## Wake a Device
 
-A MAC address is enough on its own: a device is looked for on the local network by ARP, which needs
-no IP address and works even when the device refuses every port. So a device with no IP address on
-record, or one that isn't on the list at all, is confirmed like any other. `?wait=0` is the only
-case that goes unconfirmed, and answers `202` — the packet went out, nothing was checked.
+```sh
+curl http://wolnet:8778/api/wake/my-pc
+```
 
-ARP does not cross a router, so a device on another network can't be confirmed that way; one with an
-IP address on record falls back to probing it, which does work off-segment (though Wake-on-LAN
-itself doesn't).
+WolNet sends the wake signal, then waits until the device is on before it answers. If the device is already on,
+it answers right away and doesn't send anything.
+
+`{device}` can also be any MAC address, even one that isn't on the list.
+
+`?wait=<seconds>` sets how long to wait. The default is `120` and the most is `240`. `?wait=0` sends the
+signal and answers right away, without checking.
+
+| Status | Meaning                                                    |
+| ------ | ---------------------------------------------------------- |
+| `200`  | The device is on                                           |
+| `202`  | The signal was sent, but not checked (`?wait=0`)           |
+| `504`  | The signal was sent, but the device didn't come on in time |
+| `404`  | No device by that name, and it isn't a MAC address         |
+| `400`  | The device has no MAC address, or `wait` is wrong          |
 
 ```jsonc
 {
-	"woken": true, // a magic packet was sent
-	"alreadyOnline": false, // it was reachable before anything was sent
-	"confirmed": false, // it answered a probe
-	"device": {/* … */}, // omitted for a MAC that isn't on the list
+	"result": "awake", // "awake", "alreadyOnline", or "sent"
+	"message": "my-pc is awake.",
+	"device": {/* ... */}, // Left out for a MAC address that isn't on the list
 }
 ```
 
-## Device list
+## Devices
 
-- `GET /api/devices` — lists every device on the list, oldest first, as `{ "devices": [ … ] }`.
-- `POST|PATCH /api/add-device` — adds a device, or modifies the one already matching the given
-  hostname or MAC address. Responds `201` with the new device, or `200` with the updated one.
-  Accepts `hostname`, `macAddress`, `ip` and `comment`; at least one of the first three is
-  required. The two verbs differ only in what happens to an existing device:
-  - `POST` **replaces** it — fields left out are cleared, so the call describes it in full.
-  - `PATCH` **merges** — fields left out keep their stored value. Clearing one therefore needs a
-    `POST`, since a blank field reads as "not given".
-- `POST|DELETE /api/remove-device/{device-hostname-or-mac}` — removes a device from the list.
-  Responds with `{ "removed": { … } }`.
+A device looks like this. Fields that aren't set are left out.
+
+```jsonc
+{
+	"id": "k3x9q0m2a7bz",
+	"name": "Living Room PC",
+	"hostname": "my-pc.local",
+	"ip": "10.10.1.20",
+	"macAddress": "00:1a:2b:3c:4d:5e",
+	"status": "online", // "online", "offline", or "waking"
+	"lastWokenAt": "2026-11-05T18:00:00.000Z",
+	"createdAt": "2026-11-01T12:00:00.000Z",
+	"updatedAt": "2026-11-01T12:00:00.000Z",
+}
+```
+
+`GET /api/devices` answers `{ "devices": [ ... ] }`, oldest first. The others answer with one device.
+
+### Add or Change a Device
+
+`POST` and `PATCH` take a JSON body with any of `name`, `hostname`, `macAddress`, and `ip`.
+
+- `POST /api/devices` adds a device. It needs at least a hostname, MAC address, or IP address. It answers
+  `201`.
+- `PATCH /api/devices/{device}` changes only the fields you send. Send `""` to clear a field.
+
+Both answer `409` if another device already has that hostname, MAC address, or IP address.
+
+```sh
+curl -X POST http://wolnet:8778/api/devices \
+  -H 'content-type: application/json' \
+  -d '{ "name": "Living Room PC", "macAddress": "00:1a:2b:3c:4d:5e", "ip": "10.10.1.20" }'
+```
+
+### Remove a Device
+
+```sh
+curl -X DELETE http://wolnet:8778/api/devices/my-pc -H 'content-type: application/json'
+```
+
+Answers with the device that was removed.
+
+## Scan the Network
+
+`GET /api/scan` takes a few seconds and answers with every device that answered:
+
+```jsonc
+{
+	"subnets": ["10.10.1.0/24"],
+	"devices": [
+		{
+			"ip": "10.10.1.20",
+			"macAddress": "00:1a:2b:3c:4d:5e",
+			"hostname": "my-pc.local", // From mDNS, if the device has it
+			"name": "Living Room PC", // From UPnP, if the device has it
+			"sources": ["arp", "mdns"], // How it was found
+			"knownDeviceId": "k3x9q0m2a7bz", // Set if it's already on the list
+		},
+	],
+}
+```

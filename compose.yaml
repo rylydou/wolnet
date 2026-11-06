@@ -1,21 +1,17 @@
 services:
   wolnet:
-    build: .
-    image: wolnet
+    image: ghcr.io/rylydou/wolnet:latest
     container_name: wolnet
     restart: unless-stopped
 
-    # Wake-on-LAN sends UDP broadcasts, which don't escape Docker's bridge network - the container
-    # shares the host's network stack so magic packets actually land on the LAN. That also means
-    # `ports:` doesn't apply: the server is reachable on the host's own PORT (8778 by default).
+    # Wake-on-LAN packets are broadcasts, which can't leave Docker's own network. Host networking
+    # puts WolNet directly on your LAN. It also means `ports:` doesn't apply: WolNet listens on
+    # the host's port 8778 (change it with PORT).
     network_mode: host
     environment:
       PORT: 8778
 
-    # `/data` (WOL_DATA_DIR, set in the Dockerfile) is where the SQLite database lives - the same
-    # role `data/` in the project root plays during development. A named volume keeps it owned by
-    # the container's unprivileged user; swap in `- ./data:/data` to keep the files next to this
-    # file instead, which needs that directory to be writable by uid 1000.
+    # The SQLite database. To keep it in a folder instead, use something like `./data:/data`.
     volumes:
       - data:/data
 

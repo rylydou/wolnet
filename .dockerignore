@@ -1,14 +1,14 @@
 .git
 .github
+.claude
+.vscode
 .svelte-kit
 build
 node_modules
 data
 .env
 .env.*
-!.env.example
 docs
-README.md
+*.md
 Dockerfile
-.dockerignore
 compose.yaml

@@ -1,21 +1,43 @@
-# CLI
+# Command Line
 
-- Wake
-  - `wolnet wake {device-hostname}`: Wake a device by hostname that's on the list.
-  - `wolnet wake {device-mac}`: Wake a device by mac address. Does not require the device to be added already.
-  - `--wait {seconds}`: How long to wait for the device to come online before giving up. Defaults to `120`; `0` returns as soon as the packet is sent. The command blocks until the device answers, so it only prints `is awake` once that's true.
+The `wolnet` command talks to a WolNet server over the [API](api.md).
 
-- Device List Mangement
-  - `wolnet add --hostname {} --mac {} --comment {}`: Adds a device to the list
-  - `wolnet remove {server-hostname-or-mac}`: Adds a device to the list. Aliases: rm
-  - `wolnet scan`: Adds a device to the list by scanning for devices currently on the local network using a TUI
-  - `wolnet devices`: Lists currently known devices. Aliases: list, ls
+- In Docker, it's already installed: `docker exec wolnet wolnet devices`
+- Anywhere else with [Bun](https://bun.com), copy `src/cli/index.ts`, or run `bun run cli` in this repo
 
-- Global flags
-  - `--server {server-hostname:optional-port}`: Runs the command against another WolNet instance instead of the local one. Port `8778` is assumed, and `WOL_SERVER_URL` sets the default. Aliases: -s
-  - `--replace`: Makes `add` describe the device in full, clearing the fields left out, rather than merging into the one already on the list.
+`<device>` can be a hostname, IP address, MAC address, or id.
 
-<!-- - WolNet Mangement
-  - `wolnet link {server-hostname:optional-port}`: Links this WolNet instance to another WolNet instance to share known devices.
-  - `wolnet unlink {server-hostname}`: Removes a linked WolNet. Aliases: unlink, rm link
-  - `wolnet sync`: Forces a multi-WolNet sync across ALL linked WolNets -->
+## Commands
+
+- `wolnet wake <device>`: Wake a device and wait until it's on. `<device>` can also be any MAC address, even one
+  that isn't on the list.
+  - `--wait <seconds>`: How long to wait. The default is `120`, the most is `240`. `0` means don't wait.
+- `wolnet devices`: List devices and whether they're on. Also `list` or `ls`.
+- `wolnet add`: Add a device. Give at least `--hostname`, `--mac`, or `--ip`.
+- `wolnet edit <device>`: Change a device. Only the fields you give change. Use `""` to clear one, like
+  `--name ""`.
+- `wolnet remove <device>`: Remove a device. Also `rm`.
+- `wolnet scan`: Find devices on the network. Add one with `wolnet add`.
+
+Fields for `add` and `edit`:
+
+- `--name <text>`: What to call it, like `"Living Room PC"`
+- `--hostname <name>`: Like `my-pc.local`
+- `--mac <address>`: Like `00:1a:2b:3c:4d:5e`
+- `--ip <address>`: Like `10.10.1.20`
+
+## Which Server
+
+By default, `wolnet` uses the server on this machine (`localhost:8778`). To use another one:
+
+- `--server <host>` (or `-s`) for one command, like `wolnet -s truenas wake my-pc`. The port defaults to `8778`.
+- `WOL_SERVER_URL` to change the default, like `export WOL_SERVER_URL=http://truenas:8778`.
+
+## Examples
+
+```sh
+wolnet add --name "Living Room PC" --mac 00:1a:2b:3c:4d:5e --ip 10.10.1.20
+wolnet wake 10.10.1.20
+wolnet edit 10.10.1.20 --hostname my-pc.local
+wolnet rm my-pc.local
+```
